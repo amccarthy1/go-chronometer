@@ -15,6 +15,16 @@ const (
 
 func NewJobManager() *JobManager {
 	jm := JobManager{}
+
+	jm.LoadedJobs = map[string]Job{}
+	jm.RunningTasks = map[string]Task{}
+	jm.Schedules = map[string]Schedule{}
+
+	jm.cancellationTokens = map[string]*CancellationToken{}
+	jm.runningTaskStartTimes = map[string]time.Time{}
+	jm.lastRunTimes = map[string]time.Time{}
+	jm.nextRunTimes = map[string]time.Time{}
+
 	jm.metaLock = &sync.Mutex{}
 	return &jm
 }
@@ -90,7 +100,9 @@ func (jm *JobManager) RunTask(t Task) error {
 	ct := jm.createCancellationToken()
 
 	jm.RunningTasks[taskName] = t
+
 	jm.cancellationTokens[taskName] = ct
+	jm.runningTaskStartTimes[taskName] = time.Now().UTC()
 
 	go func() {
 		defer jm.cleanupTask(taskName)
@@ -133,7 +145,7 @@ func (jm *JobManager) CancelTask(taskName string) error {
 func (jm *JobManager) Start() {
 	ct := jm.createCancellationToken()
 	jm.schedulerToken = ct
-	go jm.schedule()
+	go jm.schedule(ct)
 	jm.isRunning = true
 }
 
@@ -152,7 +164,7 @@ func (jm *JobManager) schedule(ct *CancellationToken) {
 		for jobName, nextRunTime := range jm.nextRunTimes {
 			if nextRunTime.Sub(now) < HEARTBEAT_INTERVAL {
 				jm.RunJob(jobName)
-				jm.nextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(now)
+				jm.nextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(&now)
 			}
 		}
 
