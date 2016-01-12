@@ -107,17 +107,26 @@ func (jm *JobManager) RunTask(t Task) error {
 	go func() {
 		defer jm.cleanupTask(taskName)
 
-		t.OnStart()
+		if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+			signalReceiver.OnStart()
+		}
+
 		if ct.ShouldCancel {
-			t.OnCancellation()
+			if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+				signalReceiver.OnCancellation()
+			}
 			return
 		}
 		result := t.Execute(ct)
 		if ct.ShouldCancel {
-			t.OnCancellation()
+			if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+				signalReceiver.OnCancellation()
+			}
 			return
 		}
-		t.OnComplete(result)
+		if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+			signalReceiver.OnComplete(result)
+		}
 	}()
 	return nil
 }

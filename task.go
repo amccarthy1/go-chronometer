@@ -8,12 +8,15 @@ import (
 
 type TaskAction func(ct *CancellationToken) error
 
-type Task interface {
-	Name() string
-	Execute(ct *CancellationToken) error
+type SignalReceiver interface {
 	OnStart()
 	OnCancellation()
 	OnComplete(err error)
+}
+
+type Task interface {
+	Name() string
+	Execute(ct *CancellationToken) error
 }
 
 type basicTask struct {

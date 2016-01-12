@@ -18,22 +18,6 @@ func (pj *printJob) Name() string {
 	return "printJob"
 }
 
-func (pj *printJob) OnStart() {
-	fmt.Println("(printJob) starting")
-}
-
-func (pj *printJob) OnCancellation() {
-	fmt.Println("(printJob) cancelled")
-}
-
-func (pj *printJob) OnComplete(err error) {
-	time.Sleep(500 * time.Millisecond)
-	fmt.Println("(printJob) complete")
-	if err != nil {
-		fmt.Printf("with error: %v\n", err)
-	}
-}
-
 func (pj *printJob) Execute(ct *chronometer.CancellationToken) error {
 	fmt.Printf("(printJob) run at %v\n", time.Now().UTC())
 	return nil
