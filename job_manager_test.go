@@ -23,9 +23,63 @@ func TestRunTask(t *testing.T) {
 		if didRun {
 			break
 		}
+
+		a.Len(jm.RunningTasks, 1)
+		a.Len(jm.runningTaskStartTimes, 1)
+		a.Len(jm.cancellationTokens, 1)
+
 		elapsed = elapsed + 10*time.Millisecond
 		time.Sleep(10 * time.Millisecond)
 	}
 
+	a.True(didRun)
+}
+
+func TestRunTaskAndCancel(t *testing.T) {
+	a := assert.New(t)
+
+	jm := NewJobManager()
+
+	didRun := false
+	didCancel := false
+	jm.RunTask(NewTask(func(ct *CancellationToken) error {
+		didRun = true
+		taskElapsed := time.Duration(0)
+		for taskElapsed < 1*time.Second {
+			if ct.ShouldCancel {
+				didCancel = true
+				return nil
+			}
+			taskElapsed = taskElapsed + 10*time.Millisecond
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		return nil
+	}))
+
+	elapsed := time.Duration(0)
+	for elapsed < 1*time.Second {
+		if didRun {
+			break
+		}
+
+		elapsed = elapsed + 10*time.Millisecond
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	for _, ct := range jm.cancellationTokens {
+		ct.Cancel()
+	}
+
+	elapsed = time.Duration(0)
+	for elapsed < 1*time.Second {
+		if didCancel {
+			break
+		}
+
+		elapsed = elapsed + 10*time.Millisecond
+		time.Sleep(10 * time.Millisecond)
+	}
+	a.True(didCancel)
 	a.True(didRun)
 }
