@@ -2,16 +2,18 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
+	"math/rand"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/blendlabs/go-chronometer"
 )
 
 type printJob struct {
+}
+
+func (pj *printJob) Timeout() time.Duration {
+	return 2 * time.Second
 }
 
 func (pj *printJob) Name() string {
@@ -24,34 +26,32 @@ func (pj *printJob) OnStart() {
 
 func (pj *printJob) Execute(ct *chronometer.CancellationToken) error {
 	fmt.Printf("(printJob) run at %v\n", time.Now().UTC())
-	time.Sleep(250 * time.Millisecond)
+	if rand.Int()%2 == 1 {
+		time.Sleep(2000 * time.Millisecond)
+	} else {
+		time.Sleep(8000 * time.Millisecond)
+	}
 	return nil
+}
+
+func (pj *printJob) OnCancellation() {
+	fmt.Println("(printJob) CANCELLED!")
 }
 
 func (pj *printJob) OnComplete(err error) {
 	fmt.Printf("(printJob) finished at %v\n", time.Now().UTC())
+	if err != nil {
+		fmt.Printf("(printJob) onComplete error: %v\n", err)
+	}
 }
 
 func (pj *printJob) Schedule() chronometer.Schedule {
-	return chronometer.EverySecond()
+	return chronometer.Every(10 * time.Second)
 }
 
 func main() {
 	chronometer.Default().LoadJob(&printJob{})
 	chronometer.Default().Start()
-
-	//handle os signals ...
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	go func() {
-		<-sigs
-		chronometer.Default().CancelTask("printJob")
-		wg.Done()
-	}()
 
 	chronometer.Default().RunTask(chronometer.NewTask(func(ct *chronometer.CancellationToken) error {
 		if ct.ShouldCancel {
@@ -63,5 +63,7 @@ func main() {
 		return nil
 	}))
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	wg.Wait()
 }

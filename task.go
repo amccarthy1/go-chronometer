@@ -2,12 +2,17 @@ package chronometer
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/blendlabs/go-util"
 )
 
 type CancellationSignalReciever func()
 type TaskAction func(ct *CancellationToken) error
+
+type TimeoutProvider interface {
+	Timeout() time.Duration
+}
 
 type OnStartSignalReceiver interface {
 	OnStart()

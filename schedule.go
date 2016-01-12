@@ -20,7 +20,7 @@ var (
 // NOTE: we have to use shifts here because in their infinite wisdom google didn't make these values powers of two for masking
 
 const (
-	EVERY_DAY    = 1<<uint(time.Sunday) | 1<<uint(time.Monday) | 1<<uint(time.Tuesday) | 1<<uint(time.Wednesday) | 1<<uint(time.Thursday) | 1<<uint(time.Friday) | 1<<uint(time.Saturday)
+	ALL_DAYS     = 1<<uint(time.Sunday) | 1<<uint(time.Monday) | 1<<uint(time.Tuesday) | 1<<uint(time.Wednesday) | 1<<uint(time.Thursday) | 1<<uint(time.Friday) | 1<<uint(time.Saturday)
 	WEEK_DAYS    = 1<<uint(time.Monday) | 1<<uint(time.Tuesday) | 1<<uint(time.Wednesday) | 1<<uint(time.Thursday) | 1<<uint(time.Friday)
 	WEEKEND_DAYS = 1<<uint(time.Sunday) | 1<<uint(time.Saturday)
 )
@@ -59,6 +59,10 @@ func EveryMinute() Schedule {
 
 func EveryHour() Schedule {
 	return IntervalSchedule{Every: 1 * time.Hour}
+}
+
+func Every(t time.Duration) Schedule {
+	return IntervalSchedule{Every: t}
 }
 
 type DailySchedule struct {
@@ -100,7 +104,7 @@ func WeeklyAt(hour, minute, second int, days ...time.Weekday) Schedule {
 }
 
 func DailyAt(hour, minute, second int) Schedule {
-	return &DailySchedule{DayOfWeekMask: EVERY_DAY, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
+	return &DailySchedule{DayOfWeekMask: ALL_DAYS, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
 }
 
 func WeekdaysAt(hour, minute, second int) Schedule {

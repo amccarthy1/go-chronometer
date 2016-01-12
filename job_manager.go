@@ -143,6 +143,7 @@ func (jm *JobManager) cleanupTask(taskName string) {
 func (jm *JobManager) CancelTask(taskName string) error {
 	if _, hasJob := jm.LoadedJobs[taskName]; hasJob {
 		if token, hasCancellationToken := jm.cancellationTokens[taskName]; hasCancellationToken {
+			jm.cleanupTask(taskName)
 			token.signalCancellation()
 		} else {
 			return exception.Newf("Cancellation token for job name `%s` not found.", taskName)
@@ -174,6 +175,20 @@ func (jm *JobManager) schedule(ct *CancellationToken) {
 			if nextRunTime.Sub(now) < HEARTBEAT_INTERVAL {
 				jm.RunJob(jobName)
 				jm.nextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(&now)
+			}
+		}
+
+		for taskName, startedTime := range jm.runningTaskStartTimes {
+			if task, hasTask := jm.RunningTasks[taskName]; hasTask {
+				if timeoutProvider, isTimeoutProvder := task.(TimeoutProvider); isTimeoutProvder {
+					timeout := timeoutProvider.Timeout()
+					if now.Sub(startedTime) >= timeout {
+						jm.CancelTask(taskName)
+						if onCompleteReceiver, isOnCompleteReceiver := task.(OnCompleteSignalReceiver); isOnCompleteReceiver {
+							onCompleteReceiver.OnComplete(exception.New("Timeout Reached."))
+						}
+					}
+				}
 			}
 		}
 
