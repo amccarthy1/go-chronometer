@@ -5,7 +5,7 @@ Chronometer is a basic job scheduling, task handling library that wraps goroutin
 
 ###What is a `CancellationToken`
 
-It is the mechanism by which we signal that a task should abort. We don't have a reference to a thread or similar, so we use a simple object and signal with a boolean. We could use chanels, but this is simpler. 
+It is the mechanism by which we signal that a task should abort. We don't have a reference to a thread or similar, so we use an object and signal with a boolean. We could use chanels, but this is simpler. 
 
 ###Schedules
 
