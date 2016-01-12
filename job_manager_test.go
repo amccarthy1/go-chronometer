@@ -68,7 +68,7 @@ func TestRunTaskAndCancel(t *testing.T) {
 	}
 
 	for _, ct := range jm.cancellationTokens {
-		ct.Cancel()
+		ct.signalCancellation()
 	}
 
 	elapsed = time.Duration(0)
