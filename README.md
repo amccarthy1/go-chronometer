@@ -1,6 +1,8 @@
 Chronometer
 ===========
 
+[![Build Status](https://travis-ci.org/blendlabs/go-chronometer.svg?branch=master)](https://travis-ci.org/blendlabs/go-chronometer)
+
 Chronometer is a basic job scheduling, task handling library that wraps goroutines with a little metadata.
 
 ###What is a `CancellationToken`
