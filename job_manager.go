@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	HEARTBEAT_INTERVAL = 250 * time.Millisecond
+	HEARTBEAT_INTERVAL = 50 * time.Millisecond
 )
 
 func NewJobManager() *JobManager {
@@ -107,24 +107,24 @@ func (jm *JobManager) RunTask(t Task) error {
 	go func() {
 		defer jm.cleanupTask(taskName)
 
-		if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+		if signalReceiver, isSignalReceiver := t.(OnStartSignalReceiver); isSignalReceiver {
 			signalReceiver.OnStart()
 		}
 
 		if ct.ShouldCancel {
-			if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+			if signalReceiver, isSignalReceiver := t.(OnCancellationSignalReceiver); isSignalReceiver {
 				signalReceiver.OnCancellation()
 			}
 			return
 		}
 		result := t.Execute(ct)
 		if ct.ShouldCancel {
-			if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+			if signalReceiver, isSignalReceiver := t.(OnCancellationSignalReceiver); isSignalReceiver {
 				signalReceiver.OnCancellation()
 			}
 			return
 		}
-		if signalReceiver, isSignalReceiver := t.(SignalReceiver); isSignalReceiver {
+		if signalReceiver, isSignalReceiver := t.(OnCompleteSignalReceiver); isSignalReceiver {
 			signalReceiver.OnComplete(result)
 		}
 	}()
@@ -143,7 +143,7 @@ func (jm *JobManager) cleanupTask(taskName string) {
 func (jm *JobManager) CancelTask(taskName string) error {
 	if _, hasJob := jm.LoadedJobs[taskName]; hasJob {
 		if token, hasCancellationToken := jm.cancellationTokens[taskName]; hasCancellationToken {
-			token.Cancel()
+			token.signalCancellation()
 		} else {
 			return exception.Newf("Cancellation token for job name `%s` not found.", taskName)
 		}
@@ -162,7 +162,7 @@ func (jm *JobManager) Stop() {
 	if !jm.isRunning {
 		return
 	}
-	jm.schedulerToken.Cancel()
+	jm.schedulerToken.signalCancellation()
 	jm.isRunning = false
 }
 

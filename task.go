@@ -6,11 +6,18 @@ import (
 	"github.com/blendlabs/go-util"
 )
 
+type CancellationSignalReciever func()
 type TaskAction func(ct *CancellationToken) error
 
-type SignalReceiver interface {
+type OnStartSignalReceiver interface {
 	OnStart()
+}
+
+type OnCancellationSignalReceiver interface {
 	OnCancellation()
+}
+
+type OnCompleteSignalReceiver interface {
 	OnComplete(err error)
 }
 

@@ -18,9 +18,18 @@ func (pj *printJob) Name() string {
 	return "printJob"
 }
 
+func (pj *printJob) OnStart() {
+	fmt.Printf("(printJob) starting at %v\n", time.Now().UTC())
+}
+
 func (pj *printJob) Execute(ct *chronometer.CancellationToken) error {
 	fmt.Printf("(printJob) run at %v\n", time.Now().UTC())
+	time.Sleep(250 * time.Millisecond)
 	return nil
+}
+
+func (pj *printJob) OnComplete(err error) {
+	fmt.Printf("(printJob) finished at %v\n", time.Now().UTC())
 }
 
 func (pj *printJob) Schedule() chronometer.Schedule {
@@ -28,9 +37,8 @@ func (pj *printJob) Schedule() chronometer.Schedule {
 }
 
 func main() {
-	jm := chronometer.NewJobManager()
-	jm.LoadJob(&printJob{})
-	jm.Start()
+	chronometer.Default().LoadJob(&printJob{})
+	chronometer.Default().Start()
 
 	//handle os signals ...
 	sigs := make(chan os.Signal, 1)
@@ -41,9 +49,19 @@ func main() {
 
 	go func() {
 		<-sigs
-		jm.CancelTask("printJob")
+		chronometer.Default().CancelTask("printJob")
 		wg.Done()
 	}()
+
+	chronometer.Default().RunTask(chronometer.NewTask(func(ct *chronometer.CancellationToken) error {
+		if ct.ShouldCancel {
+			return ct.Cancel()
+		}
+		fmt.Print("Running quick task ...")
+		time.Sleep(2000 * time.Millisecond)
+		fmt.Println("complete")
+		return nil
+	}))
 
 	wg.Wait()
 }
