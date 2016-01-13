@@ -3,67 +3,70 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/blendlabs/go-chronometer"
 )
 
-type printJob struct {
+type emptyJob struct {
+	running bool
 }
 
-func (pj *printJob) Timeout() time.Duration {
+func (j *emptyJob) Timeout() time.Duration {
 	return 2 * time.Second
 }
 
-func (pj *printJob) Name() string {
+func (j *emptyJob) Name() string {
 	return "printJob"
 }
 
-func (pj *printJob) OnStart() {
-	fmt.Printf("(printJob) starting at %v\n", time.Now().UTC())
-}
-
-func (pj *printJob) Execute(ct *chronometer.CancellationToken) error {
-	fmt.Printf("(printJob) run at %v\n", time.Now().UTC())
+func (j *emptyJob) Execute(ct *chronometer.CancellationToken) error {
+	j.running = true
 	if rand.Int()%2 == 1 {
 		time.Sleep(2000 * time.Millisecond)
+
+		chronometer.Default().RunTask(chronometer.NewTask(func(ct *chronometer.CancellationToken) error {
+			time.Sleep(2000 * time.Millisecond)
+			return nil
+		}))
+
 	} else {
 		time.Sleep(8000 * time.Millisecond)
 	}
+	j.running = false
 	return nil
 }
 
-func (pj *printJob) OnCancellation() {
-	fmt.Println("(printJob) CANCELLED!")
+func (j *emptyJob) OnCancellation() {
+	j.running = false
 }
 
-func (pj *printJob) OnComplete(err error) {
-	fmt.Printf("(printJob) finished at %v\n", time.Now().UTC())
-	if err != nil {
-		fmt.Printf("(printJob) onComplete error: %v\n", err)
+func (j *emptyJob) Status() string {
+	if j.running {
+		return "Request in progress"
+	} else {
+		return "Request idle."
 	}
 }
 
-func (pj *printJob) Schedule() chronometer.Schedule {
+func (j *emptyJob) Schedule() chronometer.Schedule {
 	return chronometer.Every(10 * time.Second)
 }
 
 func main() {
-	chronometer.Default().LoadJob(&printJob{})
+	chronometer.Default().LoadJob(&emptyJob{})
 	chronometer.Default().Start()
 
-	chronometer.Default().RunTask(chronometer.NewTask(func(ct *chronometer.CancellationToken) error {
-		if ct.ShouldCancel {
-			return ct.Cancel()
+	for {
+		statuses := chronometer.Default().Status()
+		for _, status := range statuses {
+			if len(status.Status) != 0 {
+				fmt.Printf("task: %s state: %s status: %s\n", status.Name, status.State, status.Status)
+			} else {
+				fmt.Printf("task: %s state: %s\n", status.Name, status.State)
+			}
 		}
-		fmt.Print("Running quick task ...")
-		time.Sleep(2000 * time.Millisecond)
-		fmt.Println("complete")
-		return nil
-	}))
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	wg.Wait()
+		time.Sleep(1000 * time.Millisecond)
+	}
 }

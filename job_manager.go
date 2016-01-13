@@ -3,6 +3,7 @@ package chronometer
 // NOTE: ALL TIMES ARE IN UTC. JUST USE UTC.
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 
 const (
 	HEARTBEAT_INTERVAL = 50 * time.Millisecond
+	STATE_RUNNING      = "running"
+	STATE_STOPPED      = "stopped"
 )
 
 func NewJobManager() *JobManager {
@@ -141,9 +144,12 @@ func (jm *JobManager) cleanupTask(taskName string) {
 }
 
 func (jm *JobManager) CancelTask(taskName string) error {
-	if _, hasJob := jm.LoadedJobs[taskName]; hasJob {
+	if task, hasTask := jm.RunningTasks[taskName]; hasTask {
 		if token, hasCancellationToken := jm.cancellationTokens[taskName]; hasCancellationToken {
 			jm.cleanupTask(taskName)
+			if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
+				receiver.OnCancellation()
+			}
 			token.signalCancellation()
 		} else {
 			return exception.Newf("Cancellation token for job name `%s` not found.", taskName)
@@ -194,4 +200,42 @@ func (jm *JobManager) schedule(ct *CancellationToken) {
 
 		time.Sleep(HEARTBEAT_INTERVAL)
 	}
+}
+
+func (jm *JobManager) Status() []TaskStatus {
+	statuses := []TaskStatus{}
+	now := time.Now().UTC()
+	for jobName, job := range jm.LoadedJobs {
+		status := TaskStatus{}
+		status.Name = jobName
+
+		if runningSince, isRunning := jm.runningTaskStartTimes[jobName]; isRunning {
+			status.State = STATE_RUNNING
+			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
+		} else {
+			status.State = STATE_STOPPED
+		}
+
+		if statusProvider, isStatusProvider := job.(StatusProvider); isStatusProvider {
+			status.Status = statusProvider.Status()
+		}
+
+		statuses = append(statuses, status)
+	}
+
+	for taskName, task := range jm.RunningTasks {
+		if _, isJob := jm.LoadedJobs[taskName]; !isJob {
+			status := TaskStatus{}
+			status.Name = taskName
+			status.State = STATE_RUNNING
+			if runningSince, isRunning := jm.runningTaskStartTimes[taskName]; isRunning {
+				status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
+			}
+			if statusProvider, isStatusProvider := task.(StatusProvider); isStatusProvider {
+				status.Status = statusProvider.Status()
+			}
+			statuses = append(statuses, status)
+		}
+	}
+	return statuses
 }

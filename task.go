@@ -66,3 +66,14 @@ func NewTask(action TaskAction) Task {
 func NewTaskWithName(name string, action TaskAction) Task {
 	return &basicTask{name: name, action: action}
 }
+
+// --------------------------------------------------------------------------------
+// task status
+// --------------------------------------------------------------------------------
+
+type TaskStatus struct {
+	Name       string `json:"name"`
+	State      string `json:"state"`
+	Status     string `json:"status"`
+	RunningFor string `json:"running_for,omitempty"`
+}

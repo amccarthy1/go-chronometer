@@ -4,22 +4,17 @@ func NewCancellationToken() *CancellationToken {
 	return &CancellationToken{ShouldCancel: false}
 }
 
-func NewCancellationTokenWithReceiver(receiver CancellationSignalReciever) *CancellationToken {
-	return &CancellationToken{ShouldCancel: false, onCancellation: receiver}
-}
-
 type CancellationToken struct {
-	ShouldCancel   bool
-	onCancellation CancellationSignalReciever
+	ShouldCancel bool
+	didCancel    bool
 }
 
 func (ct *CancellationToken) signalCancellation() {
 	ct.ShouldCancel = true
+	ct.didCancel = false
 }
 
 func (ct *CancellationToken) Cancel() error {
-	if ct.onCancellation != nil {
-		ct.onCancellation()
-	}
+	ct.didCancel = true
 	return nil
 }
