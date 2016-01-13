@@ -61,8 +61,8 @@ func EveryHour() Schedule {
 	return IntervalSchedule{Every: 1 * time.Hour}
 }
 
-func Every(t time.Duration) Schedule {
-	return IntervalSchedule{Every: t}
+func Every(interval time.Duration) Schedule {
+	return IntervalSchedule{Every: interval}
 }
 
 type DailySchedule struct {
@@ -72,8 +72,8 @@ type DailySchedule struct {
 
 func (ds DailySchedule) checkDayOfWeekMask(day time.Weekday) bool {
 	trialDayMask := uint(1 << uint(day))
-	logicalResult := (ds.DayOfWeekMask & trialDayMask)
-	return logicalResult > uint(0)
+	bitwiseResult := (ds.DayOfWeekMask & trialDayMask)
+	return bitwiseResult > uint(0)
 }
 
 func (ds DailySchedule) GetNextRunTime(after *time.Time) time.Time {

@@ -7,6 +7,10 @@ import (
 	"github.com/blendlabs/go-util"
 )
 
+// --------------------------------------------------------------------------------
+// interfaces
+// --------------------------------------------------------------------------------
+
 type CancellationSignalReciever func()
 type TaskAction func(ct *CancellationToken) error
 
@@ -14,15 +18,19 @@ type TimeoutProvider interface {
 	Timeout() time.Duration
 }
 
-type OnStartSignalReceiver interface {
+type StatusProvider interface {
+	Status() string
+}
+
+type OnStartReceiver interface {
 	OnStart()
 }
 
-type OnCancellationSignalReceiver interface {
+type OnCancellationReceiver interface {
 	OnCancellation()
 }
 
-type OnCompleteSignalReceiver interface {
+type OnCompleteReceiver interface {
 	OnComplete(err error)
 }
 
@@ -30,6 +38,10 @@ type Task interface {
 	Name() string
 	Execute(ct *CancellationToken) error
 }
+
+// --------------------------------------------------------------------------------
+// quick task creation
+// --------------------------------------------------------------------------------
 
 type basicTask struct {
 	name   string

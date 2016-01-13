@@ -107,25 +107,25 @@ func (jm *JobManager) RunTask(t Task) error {
 	go func() {
 		defer jm.cleanupTask(taskName)
 
-		if signalReceiver, isSignalReceiver := t.(OnStartSignalReceiver); isSignalReceiver {
-			signalReceiver.OnStart()
+		if receiver, isReceiver := t.(OnStartReceiver); isReceiver {
+			receiver.OnStart()
 		}
 
 		if ct.ShouldCancel {
-			if signalReceiver, isSignalReceiver := t.(OnCancellationSignalReceiver); isSignalReceiver {
-				signalReceiver.OnCancellation()
+			if receiver, isReceiver := t.(OnCancellationReceiver); isReceiver {
+				receiver.OnCancellation()
 			}
 			return
 		}
 		result := t.Execute(ct)
 		if ct.ShouldCancel {
-			if signalReceiver, isSignalReceiver := t.(OnCancellationSignalReceiver); isSignalReceiver {
-				signalReceiver.OnCancellation()
+			if receiver, isReceiver := t.(OnCancellationReceiver); isReceiver {
+				receiver.OnCancellation()
 			}
 			return
 		}
-		if signalReceiver, isSignalReceiver := t.(OnCompleteSignalReceiver); isSignalReceiver {
-			signalReceiver.OnComplete(result)
+		if receiver, isReceiver := t.(OnCompleteReceiver); isReceiver {
+			receiver.OnComplete(result)
 		}
 	}()
 	return nil
@@ -184,8 +184,8 @@ func (jm *JobManager) schedule(ct *CancellationToken) {
 					timeout := timeoutProvider.Timeout()
 					if now.Sub(startedTime) >= timeout {
 						jm.CancelTask(taskName)
-						if onCompleteReceiver, isOnCompleteReceiver := task.(OnCompleteSignalReceiver); isOnCompleteReceiver {
-							onCompleteReceiver.OnComplete(exception.New("Timeout Reached."))
+						if receiver, isReceiver := task.(OnCompleteReceiver); isReceiver {
+							receiver.OnComplete(exception.New("Timeout Reached."))
 						}
 					}
 				}
