@@ -1,5 +1,7 @@
 package chronometer
 
+import "github.com/blendlabs/go-exception"
+
 func NewCancellationToken() *CancellationToken {
 	return &CancellationToken{ShouldCancel: false}
 }
@@ -16,5 +18,5 @@ func (ct *CancellationToken) signalCancellation() {
 
 func (ct *CancellationToken) Cancel() error {
 	ct.didCancel = true
-	return nil
+	return exception.New("Task Cancellation")
 }

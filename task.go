@@ -14,6 +14,11 @@ import (
 type CancellationSignalReciever func()
 type TaskAction func(ct *CancellationToken) error
 
+type ResumeProvider interface {
+	State() interface{}
+	Resume(state interface{}) error
+}
+
 type TimeoutProvider interface {
 	Timeout() time.Duration
 }
