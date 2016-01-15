@@ -3,7 +3,7 @@ package chronometer
 import "github.com/blendlabs/go-exception"
 
 func NewCancellationToken() *CancellationToken {
-	return &CancellationToken{ShouldCancel: false}
+	return &CancellationToken{ShouldCancel: false, didCancel: false}
 }
 
 type CancellationToken struct {
