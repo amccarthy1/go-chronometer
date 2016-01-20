@@ -239,3 +239,20 @@ func (jm *JobManager) Status() []TaskStatus {
 	}
 	return statuses
 }
+
+func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
+	if task, isRunning := jm.RunningTasks[taskName]; isRunning {
+		now := time.Now().UTC()
+		status := TaskStatus{}
+		status.Name = taskName
+		status.State = STATE_RUNNING
+		if runningSince, isRunning := jm.runningTaskStartTimes[taskName]; isRunning {
+			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
+		}
+		if statusProvider, isStatusProvider := task.(StatusProvider); isStatusProvider {
+			status.Status = statusProvider.Status()
+		}
+		return &status
+	}
+	return nil
+}
