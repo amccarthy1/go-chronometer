@@ -25,8 +25,8 @@ func TestRunTask(t *testing.T) {
 		}
 
 		a.Len(jm.RunningTasks, 1)
-		a.Len(jm.runningTaskStartTimes, 1)
-		a.Len(jm.cancellationTokens, 1)
+		a.Len(jm.RunningTaskStartTimes, 1)
+		a.Len(jm.CancellationTokens, 1)
 
 		elapsed = elapsed + 10*time.Millisecond
 		time.Sleep(10 * time.Millisecond)
@@ -67,7 +67,7 @@ func TestRunTaskAndCancel(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	for _, ct := range jm.cancellationTokens {
+	for _, ct := range jm.CancellationTokens {
 		ct.signalCancellation()
 	}
 

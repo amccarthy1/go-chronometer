@@ -23,10 +23,10 @@ func NewJobManager() *JobManager {
 	jm.RunningTasks = map[string]Task{}
 	jm.Schedules = map[string]Schedule{}
 
-	jm.cancellationTokens = map[string]*CancellationToken{}
-	jm.runningTaskStartTimes = map[string]time.Time{}
-	jm.lastRunTimes = map[string]time.Time{}
-	jm.nextRunTimes = map[string]time.Time{}
+	jm.CancellationTokens = map[string]*CancellationToken{}
+	jm.RunningTaskStartTimes = map[string]time.Time{}
+	jm.LastRunTimes = map[string]time.Time{}
+	jm.NextRunTimes = map[string]time.Time{}
 
 	jm.metaLock = &sync.Mutex{}
 	return &jm
@@ -52,10 +52,10 @@ type JobManager struct {
 	RunningTasks map[string]Task
 	Schedules    map[string]Schedule
 
-	cancellationTokens    map[string]*CancellationToken
-	runningTaskStartTimes map[string]time.Time
-	lastRunTimes          map[string]time.Time
-	nextRunTimes          map[string]time.Time
+	CancellationTokens    map[string]*CancellationToken
+	RunningTaskStartTimes map[string]time.Time
+	LastRunTimes          map[string]time.Time
+	NextRunTimes          map[string]time.Time
 
 	isRunning      bool
 	schedulerToken *CancellationToken
@@ -79,7 +79,7 @@ func (jm *JobManager) LoadJob(j Job) error {
 
 	jm.LoadedJobs[jobName] = j
 	jm.Schedules[jobName] = jobSchedule
-	jm.nextRunTimes[jobName] = jobSchedule.GetNextRunTime(nil)
+	jm.NextRunTimes[jobName] = jobSchedule.GetNextRunTime(nil)
 
 	return nil
 }
@@ -88,7 +88,7 @@ func (jm *JobManager) RunJob(jobName string) error {
 	if job, hasJob := jm.LoadedJobs[jobName]; hasJob {
 		now := time.Now().UTC()
 
-		jm.lastRunTimes[jobName] = now
+		jm.LastRunTimes[jobName] = now
 
 		return jm.RunTask(job)
 	}
@@ -98,7 +98,7 @@ func (jm *JobManager) RunJob(jobName string) error {
 func (jm *JobManager) RunAllJobs() error {
 	now := time.Now().UTC()
 	for jobName, job := range jm.LoadedJobs {
-		jm.lastRunTimes[jobName] = now
+		jm.LastRunTimes[jobName] = now
 		job_err := jm.RunTask(job)
 		if job_err != nil {
 			return job_err
@@ -116,8 +116,8 @@ func (jm *JobManager) RunTask(t Task) error {
 
 	jm.RunningTasks[taskName] = t
 
-	jm.cancellationTokens[taskName] = ct
-	jm.runningTaskStartTimes[taskName] = time.Now().UTC()
+	jm.CancellationTokens[taskName] = ct
+	jm.RunningTaskStartTimes[taskName] = time.Now().UTC()
 
 	go func() {
 		defer jm.cleanupTask(taskName)
@@ -150,14 +150,14 @@ func (jm *JobManager) cleanupTask(taskName string) {
 	jm.metaLock.Lock()
 	defer jm.metaLock.Unlock()
 
-	delete(jm.runningTaskStartTimes, taskName)
+	delete(jm.RunningTaskStartTimes, taskName)
 	delete(jm.RunningTasks, taskName)
-	delete(jm.cancellationTokens, taskName)
+	delete(jm.CancellationTokens, taskName)
 }
 
 func (jm *JobManager) CancelTask(taskName string) error {
 	if task, hasTask := jm.RunningTasks[taskName]; hasTask {
-		if token, hasCancellationToken := jm.cancellationTokens[taskName]; hasCancellationToken {
+		if token, hasCancellationToken := jm.CancellationTokens[taskName]; hasCancellationToken {
 			jm.cleanupTask(taskName)
 			if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
 				receiver.OnCancellation()
@@ -189,14 +189,14 @@ func (jm *JobManager) schedule(ct *CancellationToken) {
 	for !ct.ShouldCancel {
 		now := time.Now().UTC()
 
-		for jobName, nextRunTime := range jm.nextRunTimes {
+		for jobName, nextRunTime := range jm.NextRunTimes {
 			if nextRunTime.Sub(now) < HEARTBEAT_INTERVAL {
 				jm.RunJob(jobName)
-				jm.nextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(&now)
+				jm.NextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(&now)
 			}
 		}
 
-		for taskName, startedTime := range jm.runningTaskStartTimes {
+		for taskName, startedTime := range jm.RunningTaskStartTimes {
 			if task, hasTask := jm.RunningTasks[taskName]; hasTask {
 				if timeoutProvider, isTimeoutProvder := task.(TimeoutProvider); isTimeoutProvder {
 					timeout := timeoutProvider.Timeout()
@@ -221,7 +221,7 @@ func (jm *JobManager) Status() []TaskStatus {
 		status := TaskStatus{}
 		status.Name = jobName
 
-		if runningSince, isRunning := jm.runningTaskStartTimes[jobName]; isRunning {
+		if runningSince, isRunning := jm.RunningTaskStartTimes[jobName]; isRunning {
 			status.State = STATE_RUNNING
 			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
 		} else {
@@ -240,7 +240,7 @@ func (jm *JobManager) Status() []TaskStatus {
 			status := TaskStatus{}
 			status.Name = taskName
 			status.State = STATE_RUNNING
-			if runningSince, isRunning := jm.runningTaskStartTimes[taskName]; isRunning {
+			if runningSince, isRunning := jm.RunningTaskStartTimes[taskName]; isRunning {
 				status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
 			}
 			if statusProvider, isStatusProvider := task.(StatusProvider); isStatusProvider {
@@ -258,7 +258,7 @@ func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
 		status := TaskStatus{}
 		status.Name = taskName
 		status.State = STATE_RUNNING
-		if runningSince, isRunning := jm.runningTaskStartTimes[taskName]; isRunning {
+		if runningSince, isRunning := jm.RunningTaskStartTimes[taskName]; isRunning {
 			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
 		}
 		if statusProvider, isStatusProvider := task.(StatusProvider); isStatusProvider {
