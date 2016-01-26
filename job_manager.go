@@ -97,7 +97,7 @@ func (jm *JobManager) RunJob(jobName string) error {
 
 func (jm *JobManager) RunAllJobs() error {
 	now := time.Now().UTC()
-	for jobName, _ := range jm.LoadedJobs {
+	for jobName, job := range jm.LoadedJobs {
 		jm.lastRunTimes[jobName] = now
 		job_err := jm.RunTask(job)
 		if job_err != nil {
