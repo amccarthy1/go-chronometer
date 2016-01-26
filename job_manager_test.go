@@ -12,8 +12,10 @@ func TestRunTask(t *testing.T) {
 
 	jm := NewJobManager()
 
+	runCount := 0
 	didRun := false
 	jm.RunTask(NewTask(func(ct *CancellationToken) error {
+		runCount++
 		didRun = true
 		return nil
 	}))
@@ -31,7 +33,7 @@ func TestRunTask(t *testing.T) {
 		elapsed = elapsed + 10*time.Millisecond
 		time.Sleep(10 * time.Millisecond)
 	}
-
+	a.Equal(1, runCount)
 	a.True(didRun)
 }
 
@@ -82,4 +84,57 @@ func TestRunTaskAndCancel(t *testing.T) {
 	}
 	a.True(didCancel)
 	a.True(didRun)
+}
+
+type testJob struct {
+	RunAt       time.Time
+	RunDelegate func(ct *CancellationToken) error
+}
+
+type testJobSchedule struct {
+	RunAt time.Time
+}
+
+func (tjs testJobSchedule) GetNextRunTime(after *time.Time) time.Time {
+	return tjs.RunAt
+}
+
+func (tj *testJob) Name() string {
+	return "testJob"
+}
+
+func (tj *testJob) Schedule() Schedule {
+	return testJobSchedule{RunAt: tj.RunAt}
+}
+
+func (tj *testJob) Execute(ct *CancellationToken) error {
+	return tj.RunDelegate(ct)
+}
+
+func TestRunJobBySchedule(t *testing.T) {
+	a := assert.New(t)
+
+	didRun := false
+	runCount := 0
+	jm := NewJobManager()
+	jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
+		runCount++
+		didRun = true
+		return nil
+	}})
+	jm.Start()
+	defer jm.Stop()
+
+	elapsed := time.Duration(0)
+	for elapsed < 1*time.Second {
+		if didRun {
+			break
+		}
+
+		elapsed = elapsed + 10*time.Millisecond
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	a.True(didRun)
+	a.Equal(1, runCount)
 }

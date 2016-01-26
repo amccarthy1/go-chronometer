@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	HEARTBEAT_INTERVAL = 50 * time.Millisecond
+	HEARTBEAT_INTERVAL = 250 * time.Millisecond
 	STATE_RUNNING      = "running"
 	STATE_STOPPED      = "stopped"
 )
