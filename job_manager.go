@@ -95,6 +95,18 @@ func (jm *JobManager) RunJob(jobName string) error {
 	return exception.Newf("Job name `%s` not found.", jobName)
 }
 
+func (jm *JobManager) RunAllJobs() error {
+	now := time.Now().UTC()
+	for jobName, _ := range jm.LoadedJobs {
+		jm.lastRunTimes[jobName] = now
+		job_err := jm.RunTask(job)
+		if job_err != nil {
+			return job_err
+		}
+	}
+	return nil
+}
+
 func (jm *JobManager) RunTask(t Task) error {
 	jm.metaLock.Lock()
 	defer jm.metaLock.Unlock()
