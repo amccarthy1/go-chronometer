@@ -192,8 +192,6 @@ func (jm *JobManager) runDueJobs(ct *CancellationToken) {
 
 		for jobName, nextRunTime := range jm.NextRunTimes {
 			if nextRunTime.Before(now) {
-				fmt.Printf("%s - JOB MANAGER :: running job %s\n", time.Now().UTC().Format(time.RFC3339), jobName)
-
 				jm.metaLock.Lock()
 				jm.NextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(&now)
 				jm.metaLock.Unlock()
