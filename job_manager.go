@@ -173,7 +173,8 @@ func (jm *JobManager) CancelTask(taskName string) error {
 func (jm *JobManager) Start() {
 	ct := jm.createCancellationToken()
 	jm.schedulerToken = ct
-	go jm.schedule(ct)
+	go jm.runDueJobs(ct)
+	go jm.killHangingJobs(ct)
 	jm.isRunning = true
 }
 
@@ -185,12 +186,12 @@ func (jm *JobManager) Stop() {
 	jm.isRunning = false
 }
 
-func (jm *JobManager) schedule(ct *CancellationToken) {
+func (jm *JobManager) runDueJobs(ct *CancellationToken) {
 	for !ct.ShouldCancel {
 		now := time.Now().UTC()
 
 		for jobName, nextRunTime := range jm.NextRunTimes {
-			if nextRunTime.Sub(now) < HEARTBEAT_INTERVAL {
+			if nextRunTime.Before(now) {
 				fmt.Printf("%s - JOB MANAGER :: running job %s\n", time.Now().UTC().Format(time.RFC3339), jobName)
 
 				jm.metaLock.Lock()
@@ -200,6 +201,14 @@ func (jm *JobManager) schedule(ct *CancellationToken) {
 				jm.RunJob(jobName)
 			}
 		}
+
+		time.Sleep(HEARTBEAT_INTERVAL)
+	}
+}
+
+func (jm *JobManager) killHangingJobs(ct *CancellationToken) {
+	for !ct.ShouldCancel {
+		now := time.Now().UTC()
 
 		for taskName, startedTime := range jm.RunningTaskStartTimes {
 			if task, hasTask := jm.RunningTasks[taskName]; hasTask {
@@ -214,7 +223,6 @@ func (jm *JobManager) schedule(ct *CancellationToken) {
 				}
 			}
 		}
-
 		time.Sleep(HEARTBEAT_INTERVAL)
 	}
 }
