@@ -14,7 +14,8 @@ import (
 const (
 	HEARTBEAT_INTERVAL = 250 * time.Millisecond
 	STATE_RUNNING      = "running"
-	STATE_STOPPED      = "stopped"
+	STATE_ENABLED      = "enabled"
+	STATE_DISABLED     = "disabled"
 )
 
 func NewJobManager() *JobManager {
@@ -276,8 +277,10 @@ func (jm *JobManager) Status() []TaskStatus {
 		if runningSince, isRunning := jm.RunningTaskStartTimes[jobName]; isRunning {
 			status.State = STATE_RUNNING
 			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
+		} else if jm.DisabledJobs.Contains(jobName) {
+			status.State = STATE_DISABLED
 		} else {
-			status.State = STATE_STOPPED
+			status.State = STATE_ENABLED
 		}
 
 		if statusProvider, isStatusProvider := job.(StatusProvider); isStatusProvider {
