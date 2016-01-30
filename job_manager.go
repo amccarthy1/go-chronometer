@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/blendlabs/go-exception"
+	"github.com/blendlabs/go-util/collections"
 )
 
 const (
@@ -27,6 +28,8 @@ func NewJobManager() *JobManager {
 	jm.RunningTaskStartTimes = map[string]time.Time{}
 	jm.LastRunTimes = map[string]time.Time{}
 	jm.NextRunTimes = map[string]time.Time{}
+
+	jm.DisabledJobs = collections.StringSet{}
 
 	jm.metaLock = &sync.Mutex{}
 	return &jm
@@ -49,6 +52,7 @@ func Default() *JobManager {
 
 type JobManager struct {
 	LoadedJobs   map[string]Job
+	DisabledJobs collections.StringSet
 	RunningTasks map[string]Task
 	Schedules    map[string]Schedule
 
@@ -84,13 +88,46 @@ func (jm *JobManager) LoadJob(j Job) error {
 	return nil
 }
 
+func (jm *JobManager) DisableJob(jobName string) error {
+	if _, hasJob := jm.LoadedJobs[jobName]; hasJob {
+		return exception.New("Job name `%s` already loaded.", jobName)
+	}
+
+	jm.metaLock.Lock()
+	defer jm.metaLock.Unlock()
+
+	jm.DisabledJobs.Add(jobName)
+
+	delete(jm.NextRunTimes, jobName)
+	return nil
+}
+
+func (jm *JobManager) EnableJob(jobName string) error {
+	jm.metaLock.Lock()
+	defer jm.metaLock.Unlock()
+
+	jm.DisabledJobs.Remove(jobName)
+
+	if job, hasJob := jm.LoadedJobs[jobName]; hasJob {
+		return exception.New("Job name `%s` already loaded.", jobName)
+	} else {
+		jobSchedule := job.Schedule()
+		jm.NextRunTimes[jobName] = jobSchedule.GetNextRunTime(nil)
+	}
+	return nil
+}
+
 func (jm *JobManager) RunJob(jobName string) error {
 	if job, hasJob := jm.LoadedJobs[jobName]; hasJob {
-		now := time.Now().UTC()
+		if !jm.DisabledJobs.Contains(jobName) {
+			now := time.Now().UTC()
 
-		jm.LastRunTimes[jobName] = now
+			jm.LastRunTimes[jobName] = now
 
-		return jm.RunTask(job)
+			return jm.RunTask(job)
+		} else {
+			return nil
+		}
 	}
 	return exception.Newf("Job name `%s` not found.", jobName)
 }
@@ -98,10 +135,12 @@ func (jm *JobManager) RunJob(jobName string) error {
 func (jm *JobManager) RunAllJobs() error {
 	now := time.Now().UTC()
 	for jobName, job := range jm.LoadedJobs {
-		jm.LastRunTimes[jobName] = now
-		job_err := jm.RunTask(job)
-		if job_err != nil {
-			return job_err
+		if !jm.DisabledJobs.Contains(jobName) {
+			jm.LastRunTimes[jobName] = now
+			job_err := jm.RunTask(job)
+			if job_err != nil {
+				return job_err
+			}
 		}
 	}
 	return nil
@@ -191,12 +230,14 @@ func (jm *JobManager) runDueJobs(ct *CancellationToken) {
 		now := time.Now().UTC()
 
 		for jobName, nextRunTime := range jm.NextRunTimes {
-			if nextRunTime.Before(now) {
-				jm.metaLock.Lock()
-				jm.NextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(&now)
-				jm.metaLock.Unlock()
+			if !jm.DisabledJobs.Contains(jobName) {
+				if nextRunTime.Before(now) {
+					jm.metaLock.Lock()
+					jm.NextRunTimes[jobName] = jm.Schedules[jobName].GetNextRunTime(&now)
+					jm.metaLock.Unlock()
 
-				jm.RunJob(jobName)
+					jm.RunJob(jobName)
+				}
 			}
 		}
 
