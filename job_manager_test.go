@@ -138,3 +138,20 @@ func TestRunJobBySchedule(t *testing.T) {
 	a.True(didRun)
 	a.Equal(1, runCount)
 }
+
+func TestDisableJob(t *testing.T) {
+	a := assert.New(t)
+
+	didRun := false
+	runCount := 0
+	jm := NewJobManager()
+	jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
+		runCount++
+		didRun = true
+		return nil
+	}})
+
+	disableErr := jm.DisableJob("testJob")
+	a.Nil(disableErr)
+	a.True(jm.DisabledJobs.Contains("testJob"))
+}

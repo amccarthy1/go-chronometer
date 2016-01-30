@@ -73,7 +73,7 @@ func (jm *JobManager) createCancellationToken() *CancellationToken {
 
 func (jm *JobManager) LoadJob(j Job) error {
 	if _, hasJob := jm.LoadedJobs[j.Name()]; hasJob {
-		return exception.New("Job name `%s` already loaded.", j.Name())
+		return exception.Newf("Job name `%s` already loaded.", j.Name())
 	}
 
 	jm.metaLock.Lock()
@@ -90,15 +90,14 @@ func (jm *JobManager) LoadJob(j Job) error {
 }
 
 func (jm *JobManager) DisableJob(jobName string) error {
-	if _, hasJob := jm.LoadedJobs[jobName]; hasJob {
-		return exception.New("Job name `%s` already loaded.", jobName)
+	if _, hasJob := jm.LoadedJobs[jobName]; !hasJob {
+		return exception.Newf("Job name `%s` isn't loaded.", jobName)
 	}
 
 	jm.metaLock.Lock()
 	defer jm.metaLock.Unlock()
 
 	jm.DisabledJobs.Add(jobName)
-
 	delete(jm.NextRunTimes, jobName)
 	return nil
 }
@@ -109,8 +108,8 @@ func (jm *JobManager) EnableJob(jobName string) error {
 
 	jm.DisabledJobs.Remove(jobName)
 
-	if job, hasJob := jm.LoadedJobs[jobName]; hasJob {
-		return exception.New("Job name `%s` already loaded.", jobName)
+	if job, hasJob := jm.LoadedJobs[jobName]; !hasJob {
+		return exception.Newf("Job name `%s` isn't loaded.", jobName)
 	} else {
 		jobSchedule := job.Schedule()
 		jm.NextRunTimes[jobName] = jobSchedule.GetNextRunTime(nil)
