@@ -31,6 +31,17 @@ type Schedule interface {
 	GetNextRunTime(after *time.Time) time.Time
 }
 
+type ImmediateSchedule struct{}
+
+func (i ImmediateSchedule) GetNextRunTime(after *time.Time) time.Time {
+	return time.Now().UTC()
+}
+
+// Returns a schedule that casues a job to run immediately after completion.
+func Immediately() Schedule {
+	return ImmediateSchedule{}
+}
+
 type IntervalSchedule struct {
 	Every      time.Duration
 	StartDelay *time.Duration
