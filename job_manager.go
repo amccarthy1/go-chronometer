@@ -267,7 +267,7 @@ func (jm *JobManager) killHangingJobs(ct *CancellationToken) {
 }
 
 func (jm *JobManager) Status() []TaskStatus {
-	statuses := []TaskStatus{}
+	var statuses []TaskStatus
 	now := time.Now().UTC()
 	for jobName, job := range jm.LoadedJobs {
 		status := TaskStatus{}
@@ -291,9 +291,10 @@ func (jm *JobManager) Status() []TaskStatus {
 
 	for taskName, task := range jm.RunningTasks {
 		if _, isJob := jm.LoadedJobs[taskName]; !isJob {
-			status := TaskStatus{}
-			status.Name = taskName
-			status.State = STATE_RUNNING
+			status := TaskStatus{
+				Name:  taskName,
+				State: STATE_RUNNING,
+			}
 			if runningSince, isRunning := jm.RunningTaskStartTimes[taskName]; isRunning {
 				status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
 			}
@@ -309,9 +310,10 @@ func (jm *JobManager) Status() []TaskStatus {
 func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
 	if task, isRunning := jm.RunningTasks[taskName]; isRunning {
 		now := time.Now().UTC()
-		status := TaskStatus{}
-		status.Name = taskName
-		status.State = STATE_RUNNING
+		status := TaskStatus{
+			Name:  taskName,
+			State: STATE_RUNNING,
+		}
 		if runningSince, isRunning := jm.RunningTaskStartTimes[taskName]; isRunning {
 			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
 		}
