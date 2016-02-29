@@ -12,12 +12,20 @@ import (
 )
 
 const (
-	HEARTBEAT_INTERVAL = 250 * time.Millisecond
-	STATE_RUNNING      = "running"
-	STATE_ENABLED      = "enabled"
-	STATE_DISABLED     = "disabled"
+	// HeartbeatInterval is the interval between schedule next run checks.
+	HeartbeatInterval = 250 * time.Millisecond
+
+	//StateRunning is the running state.
+	StateRunning = "running"
+
+	// StateEnabled is the enabled state.
+	StateEnabled = "enabled"
+
+	// StateDisabled is the disabled state.
+	StateDisabled = "disabled"
 )
 
+// NewJobManager returns a new instance of JobManager.
 func NewJobManager() *JobManager {
 	jm := JobManager{}
 
@@ -39,6 +47,7 @@ func NewJobManager() *JobManager {
 var _default *JobManager
 var _defaultLock = &sync.Mutex{}
 
+// Default returns a shared instance of a JobManager.
 func Default() *JobManager {
 	if _default == nil {
 		_defaultLock.Lock()
@@ -51,6 +60,7 @@ func Default() *JobManager {
 	return _default
 }
 
+// JobManager is the main orchestration and job management object.
 type JobManager struct {
 	LoadedJobs   map[string]Job
 	DisabledJobs collections.StringSet
@@ -71,6 +81,7 @@ func (jm *JobManager) createCancellationToken() *CancellationToken {
 	return &CancellationToken{}
 }
 
+// LoadJob adds a job to the manager.
 func (jm *JobManager) LoadJob(j Job) error {
 	if _, hasJob := jm.LoadedJobs[j.Name()]; hasJob {
 		return exception.Newf("Job name `%s` already loaded.", j.Name())
@@ -89,6 +100,7 @@ func (jm *JobManager) LoadJob(j Job) error {
 	return nil
 }
 
+// DisableJob stops a job from running but does not unload it.
 func (jm *JobManager) DisableJob(jobName string) error {
 	if _, hasJob := jm.LoadedJobs[jobName]; !hasJob {
 		return exception.Newf("Job name `%s` isn't loaded.", jobName)
@@ -102,21 +114,23 @@ func (jm *JobManager) DisableJob(jobName string) error {
 	return nil
 }
 
+// EnableJob enables a job that has been disabled.
 func (jm *JobManager) EnableJob(jobName string) error {
 	jm.metaLock.Lock()
 	defer jm.metaLock.Unlock()
 
 	jm.DisabledJobs.Remove(jobName)
 
-	if job, hasJob := jm.LoadedJobs[jobName]; !hasJob {
+	job, hasJob := jm.LoadedJobs[jobName]
+	if !hasJob {
 		return exception.Newf("Job name `%s` isn't loaded.", jobName)
-	} else {
-		jobSchedule := job.Schedule()
-		jm.NextRunTimes[jobName] = jobSchedule.GetNextRunTime(nil)
 	}
+	jobSchedule := job.Schedule()
+	jm.NextRunTimes[jobName] = jobSchedule.GetNextRunTime(nil)
 	return nil
 }
 
+// RunJob runs a job by jobName on demand.
 func (jm *JobManager) RunJob(jobName string) error {
 	if job, hasJob := jm.LoadedJobs[jobName]; hasJob {
 		if !jm.DisabledJobs.Contains(jobName) {
@@ -125,27 +139,28 @@ func (jm *JobManager) RunJob(jobName string) error {
 			jm.LastRunTimes[jobName] = now
 
 			return jm.RunTask(job)
-		} else {
-			return nil
 		}
+		return nil
 	}
 	return exception.Newf("Job name `%s` not found.", jobName)
 }
 
+// RunAllJobs runs every job that has been loaded in the JobManager at once.
 func (jm *JobManager) RunAllJobs() error {
 	now := time.Now().UTC()
 	for jobName, job := range jm.LoadedJobs {
 		if !jm.DisabledJobs.Contains(jobName) {
 			jm.LastRunTimes[jobName] = now
-			job_err := jm.RunTask(job)
-			if job_err != nil {
-				return job_err
+			jobErr := jm.RunTask(job)
+			if jobErr != nil {
+				return jobErr
 			}
 		}
 	}
 	return nil
 }
 
+// RunTask runs a task on demand.
 func (jm *JobManager) RunTask(t Task) error {
 	jm.metaLock.Lock()
 	defer jm.metaLock.Unlock()
@@ -194,6 +209,7 @@ func (jm *JobManager) cleanupTask(taskName string) {
 	delete(jm.CancellationTokens, taskName)
 }
 
+// CancelTask cancels (sends the cancellation signal) to a running task.
 func (jm *JobManager) CancelTask(taskName string) error {
 	if task, hasTask := jm.RunningTasks[taskName]; hasTask {
 		if token, hasCancellationToken := jm.CancellationTokens[taskName]; hasCancellationToken {
@@ -209,6 +225,7 @@ func (jm *JobManager) CancelTask(taskName string) error {
 	return exception.Newf("Job name `%s` not found.", taskName)
 }
 
+// Start begins the schedule runner for a JobManager.
 func (jm *JobManager) Start() {
 	ct := jm.createCancellationToken()
 	jm.schedulerToken = ct
@@ -217,6 +234,7 @@ func (jm *JobManager) Start() {
 	jm.isRunning = true
 }
 
+// Stop stops the schedule runner for a JobManager.
 func (jm *JobManager) Stop() {
 	if !jm.isRunning {
 		return
@@ -241,7 +259,7 @@ func (jm *JobManager) runDueJobs(ct *CancellationToken) {
 			}
 		}
 
-		time.Sleep(HEARTBEAT_INTERVAL)
+		time.Sleep(HeartbeatInterval)
 	}
 }
 
@@ -262,10 +280,11 @@ func (jm *JobManager) killHangingJobs(ct *CancellationToken) {
 				}
 			}
 		}
-		time.Sleep(HEARTBEAT_INTERVAL)
+		time.Sleep(HeartbeatInterval)
 	}
 }
 
+// Status returns the status metadata for a JobManager
 func (jm *JobManager) Status() []TaskStatus {
 	var statuses []TaskStatus
 	now := time.Now().UTC()
@@ -274,12 +293,12 @@ func (jm *JobManager) Status() []TaskStatus {
 		status.Name = jobName
 
 		if runningSince, isRunning := jm.RunningTaskStartTimes[jobName]; isRunning {
-			status.State = STATE_RUNNING
+			status.State = StateRunning
 			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
 		} else if jm.DisabledJobs.Contains(jobName) {
-			status.State = STATE_DISABLED
+			status.State = StateDisabled
 		} else {
-			status.State = STATE_ENABLED
+			status.State = StateEnabled
 		}
 
 		if statusProvider, isStatusProvider := job.(StatusProvider); isStatusProvider {
@@ -293,7 +312,7 @@ func (jm *JobManager) Status() []TaskStatus {
 		if _, isJob := jm.LoadedJobs[taskName]; !isJob {
 			status := TaskStatus{
 				Name:  taskName,
-				State: STATE_RUNNING,
+				State: StateRunning,
 			}
 			if runningSince, isRunning := jm.RunningTaskStartTimes[taskName]; isRunning {
 				status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))
@@ -307,12 +326,13 @@ func (jm *JobManager) Status() []TaskStatus {
 	return statuses
 }
 
+// TaskStatus returns the status metadata for a given task.
 func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
 	if task, isRunning := jm.RunningTasks[taskName]; isRunning {
 		now := time.Now().UTC()
 		status := TaskStatus{
 			Name:  taskName,
-			State: STATE_RUNNING,
+			State: StateRunning,
 		}
 		if runningSince, isRunning := jm.RunningTaskStartTimes[taskName]; isRunning {
 			status.RunningFor = fmt.Sprintf("%v", now.Sub(runningSince))

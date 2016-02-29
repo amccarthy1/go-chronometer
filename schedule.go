@@ -2,27 +2,32 @@ package chronometer
 
 import "time"
 
-var DAYS_OF_WEEK = []time.Weekday{
-	time.Sunday,
-	time.Monday,
-	time.Tuesday,
-	time.Wednesday,
-	time.Thursday,
-	time.Friday,
-	time.Saturday,
-}
-
 // NOTE: time.Zero()? what's that?
 var (
-	EPOCH = time.Unix(0, 0)
+	// DaysOfWeek are all the time.Weekday in an array for utility purposes.
+	DaysOfWeek = []time.Weekday{
+		time.Sunday,
+		time.Monday,
+		time.Tuesday,
+		time.Wednesday,
+		time.Thursday,
+		time.Friday,
+		time.Saturday,
+	}
+
+	//Epoch is unix epoc saved for utility purposes.
+	Epoch = time.Unix(0, 0)
 )
 
 // NOTE: we have to use shifts here because in their infinite wisdom google didn't make these values powers of two for masking
 
 const (
-	ALL_DAYS     = 1<<uint(time.Sunday) | 1<<uint(time.Monday) | 1<<uint(time.Tuesday) | 1<<uint(time.Wednesday) | 1<<uint(time.Thursday) | 1<<uint(time.Friday) | 1<<uint(time.Saturday)
-	WEEK_DAYS    = 1<<uint(time.Monday) | 1<<uint(time.Tuesday) | 1<<uint(time.Wednesday) | 1<<uint(time.Thursday) | 1<<uint(time.Friday)
-	WEEKEND_DAYS = 1<<uint(time.Sunday) | 1<<uint(time.Saturday)
+	// AllDays is a bitmask of all the days of the week.
+	AllDays = 1<<uint(time.Sunday) | 1<<uint(time.Monday) | 1<<uint(time.Tuesday) | 1<<uint(time.Wednesday) | 1<<uint(time.Thursday) | 1<<uint(time.Friday) | 1<<uint(time.Saturday)
+	// WeekDays is a bitmask of all the weekdays of the week.
+	WeekDays = 1<<uint(time.Monday) | 1<<uint(time.Tuesday) | 1<<uint(time.Wednesday) | 1<<uint(time.Thursday) | 1<<uint(time.Friday)
+	//WeekendDays is a bitmask of the weekend days of the week.
+	WeekendDays = 1<<uint(time.Sunday) | 1<<uint(time.Saturday)
 )
 
 // The Schedule interface defines the form a schedule should take. All schedules are resposible for is giving a next run time after a last run time.
@@ -31,22 +36,85 @@ type Schedule interface {
 	GetNextRunTime(after *time.Time) time.Time
 }
 
-type ImmediateSchedule struct{}
-
-func (i ImmediateSchedule) GetNextRunTime(after *time.Time) time.Time {
-	return time.Now().UTC()
+// EverySecond returns a schedule that fires every second.
+func EverySecond() Schedule {
+	return IntervalSchedule{Every: 1 * time.Second}
 }
 
-// Returns a schedule that casues a job to run immediately after completion.
+// EveryMinute returns a schedule that fires every minute.
+func EveryMinute() Schedule {
+	return IntervalSchedule{Every: 1 * time.Minute}
+}
+
+// EveryHour returns a schedule that fire every hour.
+func EveryHour() Schedule {
+	return IntervalSchedule{Every: 1 * time.Hour}
+}
+
+// Every returns a schedule that fires every given interval.
+func Every(interval time.Duration) Schedule {
+	return IntervalSchedule{Every: interval}
+}
+
+// EveryQuarterHour returns a schedule that fires every 15 minutes, on the quarter hours (0, 15, 30, 45)
+func EveryQuarterHour() Schedule {
+	return OnTheQuarterHour{}
+}
+
+// EveryHourOnTheHour returns a schedule that fires every 60 minutes on the 00th minute.
+func EveryHourOnTheHour() Schedule {
+	return OnTheHour{}
+}
+
+// Immediately Returns a schedule that casues a job to run immediately after completion.
 func Immediately() Schedule {
 	return ImmediateSchedule{}
 }
 
+// WeeklyAt returns a schedule that fires on every of the given days at the given time by hour, minute and second.
+func WeeklyAt(hour, minute, second int, days ...time.Weekday) Schedule {
+	dayOfWeekMask := uint(0)
+	for _, day := range days {
+		dayOfWeekMask = dayOfWeekMask | 1<<uint(day)
+	}
+
+	return &DailySchedule{DayOfWeekMask: dayOfWeekMask, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
+}
+
+// DailyAt returns a schedule that fires every day at the given hour, minut and second.
+func DailyAt(hour, minute, second int) Schedule {
+	return &DailySchedule{DayOfWeekMask: AllDays, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
+}
+
+// WeekdaysAt returns a schedule that fires every week day at the given hour, minut and second.
+func WeekdaysAt(hour, minute, second int) Schedule {
+	return &DailySchedule{DayOfWeekMask: WeekDays, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
+}
+
+// WeekendsAt returns a schedule that fires every weekend day at the given hour, minut and second.
+func WeekendsAt(hour, minute, second int) Schedule {
+	return &DailySchedule{DayOfWeekMask: WeekendDays, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
+}
+
+// --------------------------------------------------------------------------------
+// Schedule Implementations
+// --------------------------------------------------------------------------------
+
+// ImmediateSchedule fires immediately.
+type ImmediateSchedule struct{}
+
+// GetNextRunTime implements Schedule.
+func (i ImmediateSchedule) GetNextRunTime(after *time.Time) time.Time {
+	return time.Now().UTC()
+}
+
+// IntervalSchedule is as chedule that fires every given interval with an optional start delay.
 type IntervalSchedule struct {
 	Every      time.Duration
 	StartDelay *time.Duration
 }
 
+// GetNextRunTime implements Schedule.
 func (i IntervalSchedule) GetNextRunTime(after *time.Time) time.Time {
 	if after == nil {
 		if i.StartDelay == nil {
@@ -60,22 +128,7 @@ func (i IntervalSchedule) GetNextRunTime(after *time.Time) time.Time {
 	}
 }
 
-func EverySecond() Schedule {
-	return IntervalSchedule{Every: 1 * time.Second}
-}
-
-func EveryMinute() Schedule {
-	return IntervalSchedule{Every: 1 * time.Minute}
-}
-
-func EveryHour() Schedule {
-	return IntervalSchedule{Every: 1 * time.Hour}
-}
-
-func Every(interval time.Duration) Schedule {
-	return IntervalSchedule{Every: interval}
-}
-
+// DailySchedule is a schedule that fires every day that satisfies the DayOfWeekMask at the given TimeOfDayUTC.
 type DailySchedule struct {
 	DayOfWeekMask uint
 	TimeOfDayUTC  time.Time
@@ -87,6 +140,7 @@ func (ds DailySchedule) checkDayOfWeekMask(day time.Weekday) bool {
 	return bitwiseResult > uint(0)
 }
 
+// GetNextRunTime implements Schedule.
 func (ds DailySchedule) GetNextRunTime(after *time.Time) time.Time {
 	if after == nil {
 		now := time.Now().UTC()
@@ -102,26 +156,51 @@ func (ds DailySchedule) GetNextRunTime(after *time.Time) time.Time {
 		}
 	}
 
-	return EPOCH
+	return Epoch
 }
 
-func WeeklyAt(hour, minute, second int, days ...time.Weekday) Schedule {
-	dayOfWeekMask := uint(0)
-	for _, day := range days {
-		dayOfWeekMask = dayOfWeekMask | 1<<uint(day)
+// OnTheQuarterHour is a schedule that fires every 15 minutes, on the quarter hours.
+type OnTheQuarterHour struct{}
+
+// GetNextRunTime implements the chronometer Schedule api.
+func (o OnTheQuarterHour) GetNextRunTime(after *time.Time) time.Time {
+	var returnValue time.Time
+	if after == nil {
+		now := time.Now().UTC()
+		if now.Minute() >= 45 {
+			returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 45, 0, 0, time.UTC).Add(15 * time.Minute)
+		} else if now.Minute() >= 30 {
+			returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 30, 0, 0, time.UTC).Add(15 * time.Minute)
+		} else if now.Minute() >= 15 {
+			returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 15, 0, 0, time.UTC).Add(15 * time.Minute)
+		} else {
+			returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC).Add(15 * time.Minute)
+		}
+	} else {
+		if after.Minute() >= 45 {
+			returnValue = time.Date(after.Year(), after.Month(), after.Day(), after.Hour(), 45, 0, 0, time.UTC).Add(15 * time.Minute)
+		} else if after.Minute() >= 30 {
+			returnValue = time.Date(after.Year(), after.Month(), after.Day(), after.Hour(), 30, 0, 0, time.UTC).Add(15 * time.Minute)
+		} else if after.Minute() >= 15 {
+			returnValue = time.Date(after.Year(), after.Month(), after.Day(), after.Hour(), 15, 0, 0, time.UTC).Add(15 * time.Minute)
+		} else {
+			returnValue = time.Date(after.Year(), after.Month(), after.Day(), after.Hour(), 0, 0, 0, time.UTC).Add(15 * time.Minute)
+		}
 	}
-
-	return &DailySchedule{DayOfWeekMask: dayOfWeekMask, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
+	return returnValue
 }
 
-func DailyAt(hour, minute, second int) Schedule {
-	return &DailySchedule{DayOfWeekMask: ALL_DAYS, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
-}
+// OnTheHour is a schedule that fires every hour on the 00th minute.
+type OnTheHour struct{}
 
-func WeekdaysAt(hour, minute, second int) Schedule {
-	return &DailySchedule{DayOfWeekMask: WEEK_DAYS, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
-}
-
-func WeekendsAt(hour, minute, second int) Schedule {
-	return &DailySchedule{DayOfWeekMask: WEEKEND_DAYS, TimeOfDayUTC: time.Date(0, 0, 0, hour, minute, second, 0, time.UTC)}
+// GetNextRunTime implements the chronometer Schedule api.
+func (o OnTheHour) GetNextRunTime(after *time.Time) time.Time {
+	var returnValue time.Time
+	if after == nil {
+		now := time.Now().UTC()
+		returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC).Add(1 * time.Hour)
+	} else {
+		returnValue = time.Date(after.Year(), after.Month(), after.Day(), after.Hour(), 0, 0, 0, time.UTC).Add(1 * time.Hour)
+	}
+	return returnValue
 }
