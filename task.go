@@ -75,7 +75,7 @@ func (bt basicTask) OnComplete(err error) {}
 
 // NewTask returns a new task wrapper for a given TaskAction.
 func NewTask(action TaskAction) Task {
-	name := fmt.Sprintf("task_%s", util.UUID_v4().ToShortString())
+	name := fmt.Sprintf("task_%s", util.UUIDv4().ToShortString())
 	return &basicTask{name: name, action: action}
 }
 
