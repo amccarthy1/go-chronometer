@@ -48,7 +48,7 @@ func TestRunTaskAndCancel(t *testing.T) {
 		didRun = true
 		taskElapsed := time.Duration(0)
 		for taskElapsed < 1*time.Second {
-			if ct.ShouldCancel {
+			if ct.ShouldCancel() {
 				didCancel = true
 				return nil
 			}
@@ -84,6 +84,35 @@ func TestRunTaskAndCancel(t *testing.T) {
 	}
 	a.True(didCancel)
 	a.True(didRun)
+}
+
+func TestRunTaskAndCancelWithPanic(t *testing.T) {
+	a := assert.New(t)
+
+	jm := NewJobManager()
+
+	start := time.Now().UTC()
+	didRun := false
+	didRunToCompletion := false
+	jm.RunTask(NewTask(func(ct *CancellationToken) error {
+		didRun = true
+		time.Sleep(1 * time.Second)
+		didRunToCompletion = true
+		return nil
+	}))
+
+	for !didRun {
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	for _, ct := range jm.CancellationTokens {
+		ct.signalCancellation()
+	}
+	elapsed := time.Now().UTC().Sub(start)
+
+	a.True(didRun)
+	a.False(didRunToCompletion)
+	a.True(elapsed < (CancellationGracePeriod + 10*time.Millisecond))
 }
 
 type testJob struct {
