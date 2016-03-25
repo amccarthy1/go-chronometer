@@ -80,10 +80,6 @@ type JobManager struct {
 	metaLock       *sync.Mutex
 }
 
-func (jm *JobManager) createCancellationToken() *CancellationToken {
-	return NewCancellationToken()
-}
-
 // LoadJob adds a job to the manager.
 func (jm *JobManager) LoadJob(j Job) error {
 	if _, hasJob := jm.LoadedJobs[j.Name()]; hasJob {
@@ -169,7 +165,7 @@ func (jm *JobManager) RunTask(t Task) error {
 	defer jm.metaLock.Unlock()
 
 	taskName := t.Name()
-	ct := jm.createCancellationToken()
+	ct := NewCancellationToken()
 
 	jm.RunningTasks[taskName] = t
 	jm.CancellationTokens[taskName] = ct
@@ -272,7 +268,7 @@ func (jm *JobManager) CancelTask(taskName string) error {
 
 // Start begins the schedule runner for a JobManager.
 func (jm *JobManager) Start() {
-	ct := jm.createCancellationToken()
+	ct := NewCancellationToken()
 	jm.schedulerToken = ct
 	go jm.runDueJobs(ct)
 	go jm.killHangingJobs(ct)
