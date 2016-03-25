@@ -93,9 +93,11 @@ func TestRunTaskAndCancelWithPanic(t *testing.T) {
 
 	start := time.Now().UTC()
 	didRun := false
+	didRunToCompletion := false
 	jm.RunTask(NewTask(func(ct *CancellationToken) error {
 		didRun = true
 		time.Sleep(1 * time.Second)
+		didRunToCompletion = true
 		return nil
 	}))
 
@@ -109,6 +111,7 @@ func TestRunTaskAndCancelWithPanic(t *testing.T) {
 	elapsed := time.Now().UTC().Sub(start)
 
 	a.True(didRun)
+	a.False(didRunToCompletion)
 	a.True(elapsed < (CancellationGracePeriod + 10*time.Millisecond))
 }
 
