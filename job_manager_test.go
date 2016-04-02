@@ -26,9 +26,9 @@ func TestRunTask(t *testing.T) {
 			break
 		}
 
-		a.Len(jm.RunningTasks, 1)
-		a.Len(jm.RunningTaskStartTimes, 1)
-		a.Len(jm.CancellationTokens, 1)
+		a.Len(jm.runningTasks, 1)
+		a.Len(jm.runningTaskStartTimes, 1)
+		a.Len(jm.cancellationTokens, 1)
 
 		elapsed = elapsed + 10*time.Millisecond
 		time.Sleep(10 * time.Millisecond)
@@ -69,7 +69,7 @@ func TestRunTaskAndCancel(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	for _, ct := range jm.CancellationTokens {
+	for _, ct := range jm.cancellationTokens {
 		ct.signalCancellation()
 	}
 
@@ -105,7 +105,7 @@ func TestRunTaskAndCancelWithPanic(t *testing.T) {
 		time.Sleep(1 * time.Millisecond)
 	}
 
-	for _, ct := range jm.CancellationTokens {
+	for _, ct := range jm.cancellationTokens {
 		ct.signalCancellation()
 	}
 	elapsed := time.Now().UTC().Sub(start)
@@ -124,8 +124,8 @@ type testJobSchedule struct {
 	RunAt time.Time
 }
 
-func (tjs testJobSchedule) GetNextRunTime(after *time.Time) time.Time {
-	return tjs.RunAt
+func (tjs testJobSchedule) GetNextRunTime(after *time.Time) *time.Time {
+	return &tjs.RunAt
 }
 
 func (tj *testJob) Name() string {
@@ -146,16 +146,18 @@ func TestRunJobBySchedule(t *testing.T) {
 	didRun := false
 	runCount := 0
 	jm := NewJobManager()
-	jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
+	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
 		runCount++
 		didRun = true
 		return nil
 	}})
+	a.Nil(err)
+
 	jm.Start()
 	defer jm.Stop()
 
 	elapsed := time.Duration(0)
-	for elapsed < 1*time.Second {
+	for elapsed < 2*time.Second {
 		if didRun {
 			break
 		}
@@ -174,13 +176,15 @@ func TestDisableJob(t *testing.T) {
 	didRun := false
 	runCount := 0
 	jm := NewJobManager()
-	jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
+	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
 		runCount++
 		didRun = true
 		return nil
 	}})
+	a.Nil(err)
 
-	disableErr := jm.DisableJob("testJob")
-	a.Nil(disableErr)
-	a.True(jm.DisabledJobs.Contains("testJob"))
+	err = jm.DisableJob("testJob")
+	a.Nil(err)
+
+	a.True(jm.disabledJobs.Contains("testJob"))
 }
