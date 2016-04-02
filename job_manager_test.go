@@ -188,3 +188,25 @@ func TestDisableJob(t *testing.T) {
 
 	a.True(jm.disabledJobs.Contains("testJob"))
 }
+
+type testJobWithTimeout struct {
+	RunAt           time.Time
+	TimeoutDuration time.Duration
+	RunDelegate     func(ct *CancellationToken) error
+}
+
+func (tj *testJobWithTimeout) Name() string {
+	return "testJobWithTimeout"
+}
+
+func (tj *testJobWithTimeout) Timeout() time.Duration {
+	return tj.TimeoutDuration
+}
+
+func (tj *testJobWithTimeout) Schedule() Schedule {
+	return testJobSchedule{RunAt: tj.RunAt}
+}
+
+func (tj *testJobWithTimeout) Execute(ct *CancellationToken) error {
+	return tj.RunDelegate(ct)
+}
