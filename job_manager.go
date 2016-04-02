@@ -565,6 +565,19 @@ func (jm *JobManager) killHangingJobsInner() {
 
 // Status returns the status metadata for a JobManager
 func (jm *JobManager) Status() []TaskStatus {
+
+	jm.loadedJobsLock.RLock()
+	defer jm.loadedJobsLock.RUnlock()
+
+	jm.runningTaskStartTimesLock.RLock()
+	defer jm.runningTaskStartTimesLock.RUnlock()
+
+	jm.disabledJobsLock.RLock()
+	defer jm.disabledJobsLock.RUnlock()
+
+	jm.runningTasksLock.RLock()
+	defer jm.runningTasksLock.RUnlock()
+
 	var statuses []TaskStatus
 	now := time.Now().UTC()
 	for jobName, job := range jm.loadedJobs {
@@ -607,6 +620,12 @@ func (jm *JobManager) Status() []TaskStatus {
 
 // TaskStatus returns the status metadata for a given task.
 func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
+	jm.runningTaskStartTimesLock.RLock()
+	defer jm.runningTaskStartTimesLock.RUnlock()
+
+	jm.runningTasksLock.RLock()
+	defer jm.runningTasksLock.RUnlock()
+
 	if task, isRunning := jm.runningTasks[taskName]; isRunning {
 		now := time.Now().UTC()
 		status := TaskStatus{
