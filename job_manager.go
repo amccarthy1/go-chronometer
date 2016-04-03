@@ -400,16 +400,28 @@ func (jm *JobManager) RunTask(t Task) error {
 
 	didFinish := false
 	taskFinished := make(chan bool, 1)
+    
+    // this is the main goroutine that runs the task
+    // it itself spawns another goroutine
 	go func() {
-		defer jm.cleanupTask(taskName)
+		// this defer cleans up the task after it runs
+        // this removes things like the start time and the cancellation token etc.
+        defer jm.cleanupTask(taskName)
+        
+        // this defer is only for cancellation panics
+        // the cancellation panic will interupt both the inner goroutine
+        // and this outer goroutine.
 		defer func() {
 			if r := recover(); r != nil { //swallow cancellation exceptions ...
 				if _, isTyped := r.(CancellationException); !isTyped {
-					panic(r)
+					panic(r) //bubble other panics up
 				}
 			}
 		}()
-
+        
+        // this go-routine enforces cancellation grace periods.
+        // after the grace period, we panic with a special object
+        // this object is then caught in the above defer
 		go func() {
 			select {
 			case <-ct.cancellationSignal:
@@ -432,6 +444,7 @@ func (jm *JobManager) RunTask(t Task) error {
 			return
 		}
 
+        // we run the body of the task here.
 		result := t.Execute(ct)
 
 		if jm.taskCancellationCheck(t, ct) {
@@ -441,8 +454,11 @@ func (jm *JobManager) RunTask(t Task) error {
 		jm.onTaskComplete(t, result)
 
 		didFinish = true
+        // we use this signal to tell the cancellation routine
+        // that it can exit
 		taskFinished <- true
 	}()
+    
 	return nil
 }
 

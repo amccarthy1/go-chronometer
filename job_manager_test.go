@@ -4,6 +4,7 @@ import (
 	"testing"
     "fmt"
 	"time"
+    "sync/atomic"
 
 	"github.com/blendlabs/go-assert"
 )
@@ -212,7 +213,6 @@ func (tj *testJobWithTimeout) Execute(ct *CancellationToken) error {
 	return tj.RunDelegate(ct)
 }
 
-
 func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	a := assert.New(t)
 
@@ -238,6 +238,7 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
         },
     })
     jm.Start()
+    defer jm.Stop()
 
 	for !didCancel {
 		time.Sleep(1 * time.Millisecond)
@@ -248,5 +249,40 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	a.True(didRun)
 	a.True(didCancel)
     // elapsed should be less than the timeout + (2 heartbeat intervals)
-	a.True(elapsed < (100 + (333*2)) * time.Millisecond, fmt.Sprintf("%v", elapsed))
+	a.True(elapsed < (100 + (HangingHeartbeatInterval*2)) * time.Millisecond, fmt.Sprintf("%v", elapsed))
+}
+
+func TestRunJobTwice(t *testing.T) {
+    a := assert.New(t)
+    
+    jm := NewJobManager()
+    
+    var runCount int32
+    var completeCount int32
+    
+    jm.LoadJob(&testJob{
+        RunAt: time.Now().UTC(),
+        RunDelegate: func(ct *CancellationToken) error {
+            atomic.AddInt32(&runCount, 1)
+            time.Sleep(50 * time.Millisecond)
+            atomic.AddInt32(&completeCount, 1)
+            return nil
+        },
+    })
+    
+    go func() {
+        err := jm.RunJob("testJob")
+        a.Nil(err)
+    }()
+    go func() {
+        err := jm.RunJob("testJob")
+        a.Nil(err)
+    }()
+    
+    for completeCount != 2 {
+        time.Sleep(10 * time.Millisecond)
+    }
+    
+    a.Equal(2, runCount)
+    a.Equal(2, completeCount)
 }
