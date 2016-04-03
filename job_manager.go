@@ -14,6 +14,9 @@ import (
 const (
 	// HeartbeatInterval is the interval between schedule next run checks.
 	HeartbeatInterval = 250 * time.Millisecond
+    
+    // HangingHeartbeatInterval is the interval between schedule next run checks.
+	HangingHeartbeatInterval = 333 * time.Millisecond
 
 	// CancellationGracePeriod is the (default) extra time tasks are given to clean themselves up.
 	CancellationGracePeriod = 500 * time.Millisecond
@@ -484,7 +487,7 @@ func (jm *JobManager) CancelTask(taskName string) error {
 		}
 		token.signalCancellation()
 	}
-	return exception.Newf("Job name `%s` not found.", taskName)
+	return exception.Newf("Task name `%s` not found.", taskName)
 }
 
 // Start begins the schedule runner for a JobManager.
@@ -535,17 +538,21 @@ func (jm *JobManager) runDueJobsInner() {
 func (jm *JobManager) killHangingJobs(ct *CancellationToken) {
 	for !ct.ShouldCancel() {
 		jm.killHangingJobsInner()
-		time.Sleep(HeartbeatInterval)
+		time.Sleep(HangingHeartbeatInterval)
 	}
 }
 
 func (jm *JobManager) killHangingJobsInner() {
-	jm.runningTaskStartTimesLock.RLock()
-	defer jm.runningTaskStartTimesLock.RUnlock()
+    
+    jm.runningTasksLock.Lock()
+	defer jm.runningTasksLock.Unlock()
+    
+	jm.runningTaskStartTimesLock.Lock()
+	defer jm.runningTaskStartTimesLock.Unlock()
 
-	jm.runningTasksLock.RLock()
-	defer jm.runningTasksLock.RUnlock()
-
+    jm.cancellationTokensLock.Lock()
+    defer jm.cancellationTokensLock.Unlock()
+    
 	now := time.Now().UTC()
 
 	for taskName, startedTime := range jm.runningTaskStartTimes {
@@ -553,15 +560,33 @@ func (jm *JobManager) killHangingJobsInner() {
 			if timeoutProvider, isTimeoutProvder := task.(TimeoutProvider); isTimeoutProvder {
 				timeout := timeoutProvider.Timeout()
 				if now.Sub(startedTime) >= timeout {
-					jm.CancelTask(taskName)
-					if receiver, isReceiver := task.(OnCompleteReceiver); isReceiver {
-						receiver.OnComplete(exception.New("Timeout Reached."))
-					}
+					jm.killHangingJob(taskName)
 				}
 			}
 		}
 	}
 }
+
+// killHangingJob cancels (sends the cancellation signal) to a running task that has exceeded its timeout.
+func (jm *JobManager) killHangingJob(taskName string) error {
+	if task, hasTask := jm.runningTasks[taskName]; hasTask {
+		if token, hasToken := jm.cancellationTokens[taskName]; hasToken {
+            defer func() {
+                token.signalCancellation()
+                
+                delete(jm.runningTasks, taskName)
+                delete(jm.runningTaskStartTimes, taskName)
+                delete(jm.cancellationTokens, taskName)
+            }()
+            
+            if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
+                receiver.OnCancellation()
+            }
+        }
+	}
+	return exception.Newf("Task name `%s` not found.", taskName)
+}
+
 
 // Status returns the status metadata for a JobManager
 func (jm *JobManager) Status() []TaskStatus {

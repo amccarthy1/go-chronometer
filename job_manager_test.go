@@ -2,6 +2,7 @@ package chronometer
 
 import (
 	"testing"
+    "fmt"
 	"time"
 
 	"github.com/blendlabs/go-assert"
@@ -209,4 +210,43 @@ func (tj *testJobWithTimeout) Schedule() Schedule {
 
 func (tj *testJobWithTimeout) Execute(ct *CancellationToken) error {
 	return tj.RunDelegate(ct)
+}
+
+
+func TestRunTaskAndCancelWithTimeout(t *testing.T) {
+	a := assert.New(t)
+
+	jm := NewJobManager()
+
+	start := time.Now().UTC()
+	didRun := false
+	didCancel := false
+	jm.LoadJob(&testJobWithTimeout{
+        RunAt: start,
+        TimeoutDuration: 100 * time.Millisecond,
+        RunDelegate: func(ct *CancellationToken) error {
+            didRun = true
+            for !didCancel {
+                if ct.ShouldCancel() {
+                    didCancel = true
+                    return ct.Cancel()
+                }
+                time.Sleep(10 * time.Millisecond)
+            }
+            
+            return nil
+        },
+    })
+    jm.Start()
+
+	for !didCancel {
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	elapsed := time.Now().UTC().Sub(start)
+
+	a.True(didRun)
+	a.True(didCancel)
+    // elapsed should be less than the timeout + (2 heartbeat intervals)
+	a.True(elapsed < (100 + (333*2)) * time.Millisecond, fmt.Sprintf("%v", elapsed))
 }
