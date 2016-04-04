@@ -400,16 +400,12 @@ func (jm *JobManager) RunTask(t Task) error {
 	// this is the main goroutine that runs the task
 	// it itself spawns another goroutine
 	go func() {
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-
 		defer func() {
 			jm.cleanupTask(taskName)
 		}()
 
 		defer func() {
 			if r := recover(); r != nil {
-				wg.Done()
 				if _, isCancellation := r.(CancellationPanic); !isCancellation {
 					panic(r)
 				}
@@ -436,11 +432,9 @@ func (jm *JobManager) RunTask(t Task) error {
 			}
 		case <-taskFinished:
 			{
-				wg.Done()
+				return
 			}
 		}
-
-		wg.Wait()
 	}()
 
 	return nil
@@ -564,13 +558,12 @@ func (jm *JobManager) killHangingJobsInner() {
 func (jm *JobManager) killHangingJob(taskName string) error {
 	if task, hasTask := jm.runningTasks[taskName]; hasTask {
 		if token, hasToken := jm.cancellationTokens[taskName]; hasToken {
-			defer func() {
-				token.Cancel()
+			fmt.Printf("%v - JOB MANAGER :: Killing hanging task: %v\n", time.Now().Format(time.RFC3339), taskName)
+			token.Cancel()
 
-				delete(jm.runningTasks, taskName)
-				delete(jm.runningTaskStartTimes, taskName)
-				delete(jm.cancellationTokens, taskName)
-			}()
+			delete(jm.runningTasks, taskName)
+			delete(jm.runningTaskStartTimes, taskName)
+			delete(jm.cancellationTokens, taskName)
 
 			if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
 				receiver.OnCancellation()

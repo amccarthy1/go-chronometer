@@ -58,12 +58,12 @@ func (j *loadTestJob) Execute(ct *chronometer.CancellationToken) error {
 	}
 	j.running = false
 	completeCount.Increment()
-	fmt.Printf("%v - Complete @ %v\n", time.Now().String(), time.Now().Sub(j.started))
+	fmt.Printf("%v - Complete @ %v\n", time.Now().Format(time.RFC3339), time.Now().Sub(j.started))
 	return nil
 }
 
 func (j *loadTestJob) OnCancellation() {
-	fmt.Printf("%v - Timeout @ %v\n", time.Now().String(), time.Now().Sub(j.started))
+	fmt.Printf("%v - Timeout @ %v\n", time.Now().Format(time.RFC3339), time.Now().Sub(j.started))
 	timeoutCount.Increment()
 	j.running = false
 }
