@@ -314,7 +314,7 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 	a := assert.New(t)
 
 	runEvery := 50 * time.Millisecond
-	runFor := 250 * time.Millisecond
+	runFor := 1000 * time.Millisecond
 
 	var runCount int64
 	jm := NewJobManager()
@@ -334,5 +334,7 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 		time.Sleep(waitFor)
 	}
 
-	a.True(runCount > int64(runFor)/int64(HeartbeatInterval))
+	expected := int64(runFor) / int64(HeartbeatInterval)
+
+	a.True(runCount >= expected, fmt.Sprintf("%d vs. %d\n", runCount, expected))
 }

@@ -410,11 +410,11 @@ func (jm *JobManager) RunTask(t Task) error {
 
 		defer func() {
 			if r := recover(); r != nil {
+				wg.Done()
 				if _, isCancellation := r.(CancellationPanic); !isCancellation {
 					panic(r)
 				}
 			}
-			wg.Done()
 		}()
 
 		didFinish := new(AtomicFlag)
