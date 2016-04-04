@@ -558,6 +558,10 @@ func (jm *JobManager) killHangingJobsInner() {
 }
 
 // killHangingJob cancels (sends the cancellation signal) to a running task that has exceeded its timeout.
+// it assumes that the following locks are held:
+// - runningTasksLock
+// - runningTaskStartTimesLock
+// - cancellationTokensLock
 func (jm *JobManager) killHangingJob(taskName string) error {
 	if task, hasTask := jm.runningTasks[taskName]; hasTask {
 		if token, hasToken := jm.cancellationTokens[taskName]; hasToken {
