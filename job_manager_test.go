@@ -281,14 +281,14 @@ func TestRunJobSimultaneously(t *testing.T) {
 
 	jm := NewJobManager()
 
-	var runCount int32
-	var completeCount int32
+	runCount := new(AtomicCounter)
+	completeCount := new(AtomicCounter)
 	jm.LoadJob(&testJob{
 		RunAt: time.Now().UTC(),
 		RunDelegate: func(ct *CancellationToken) error {
-			atomic.AddInt32(&runCount, 1)
+			runCount.Increment()
 			time.Sleep(50 * time.Millisecond)
-			atomic.AddInt32(&completeCount, 1)
+			completeCount.Increment()
 			return nil
 		},
 	})
@@ -302,12 +302,12 @@ func TestRunJobSimultaneously(t *testing.T) {
 		a.Nil(err)
 	}()
 
-	for completeCount != 2 {
+	for completeCount.Get() != 2 {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	a.Equal(2, runCount)
-	a.Equal(2, completeCount)
+	a.Equal(2, runCount.Get())
+	a.Equal(2, completeCount.Get())
 }
 
 func TestRunJobByScheduleRapid(t *testing.T) {
@@ -316,10 +316,10 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 	runEvery := 50 * time.Millisecond
 	runFor := 1000 * time.Millisecond
 
-	var runCount int64
+	runCount := new(AtomicCounter)
 	jm := NewJobManager()
 	err := jm.LoadJob(&testJobInterval{RunEvery: runEvery, RunDelegate: func(ct *CancellationToken) error {
-		atomic.AddInt64(&runCount, 1)
+		runCount.Increment()
 		return nil
 	}})
 	a.Nil(err)
@@ -336,5 +336,5 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 
 	expected := int64(runFor) / int64(HeartbeatInterval)
 
-	a.True(runCount >= expected, fmt.Sprintf("%d vs. %d\n", runCount, expected))
+	a.True(int64(runCount.Get()) >= expected, fmt.Sprintf("%d vs. %d\n", runCount, expected))
 }
