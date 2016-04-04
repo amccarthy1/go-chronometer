@@ -344,8 +344,7 @@ func (jm *JobManager) EnableJob(jobName string) error {
 	}
 
 	jm.DeleteDisabledJob(jobName)
-
-	job := jm.loadedJobs[jobName]
+	job := jm.GetLoadedJob(jobName)
 	jobSchedule := job.Schedule()
 	jm.SetNextRunTime(jobName, jobSchedule.GetNextRunTime(nil))
 
