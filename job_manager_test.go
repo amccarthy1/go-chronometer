@@ -35,9 +35,10 @@ func (tj *testJob) Execute(ct *CancellationToken) error {
 }
 
 type testJobWithTimeout struct {
-	RunAt           time.Time
-	TimeoutDuration time.Duration
-	RunDelegate     func(ct *CancellationToken) error
+	RunAt                time.Time
+	TimeoutDuration      time.Duration
+	RunDelegate          func(ct *CancellationToken) error
+	CancellationDelegate func()
 }
 
 func (tj *testJobWithTimeout) Name() string {
@@ -54,6 +55,10 @@ func (tj *testJobWithTimeout) Schedule() Schedule {
 
 func (tj *testJobWithTimeout) Execute(ct *CancellationToken) error {
 	return tj.RunDelegate(ct)
+}
+
+func (tj *testJobWithTimeout) OnCancellation() {
+	tj.CancellationDelegate()
 }
 
 type testJobInterval struct {
@@ -119,15 +124,15 @@ func TestRunTaskAndCancel(t *testing.T) {
 	jm := NewJobManager()
 
 	didRun := new(AtomicFlag)
-	didCancel := new(AtomicFlag)
-	jm.RunTask(NewTask(func(ct *CancellationToken) error {
+	didFinish := new(AtomicFlag)
+	jm.RunTask(NewTaskWithName("taskToCancel", func(ct *CancellationToken) error {
+		defer func() {
+			didFinish.Set(true)
+		}()
 		didRun.Set(true)
 		taskElapsed := time.Duration(0)
 		for taskElapsed < 1*time.Second {
-			if ct.ShouldCancel() {
-				didCancel.Set(true)
-				return ct.CanceledGracefully() // THIS MUST BE CALLED.
-			}
+			ct.CheckCancellation()
 			taskElapsed = taskElapsed + 10*time.Millisecond
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -145,58 +150,28 @@ func TestRunTaskAndCancel(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	for _, ct := range jm.cancellationTokens {
-		ct.Cancel()
-	}
-
+	jm.CancelTask("taskToCancel")
 	elapsed = time.Duration(0)
 	for elapsed < 1*time.Second {
-		if didCancel.Get() {
+		if didFinish.Get() {
 			break
 		}
 
 		elapsed = elapsed + 10*time.Millisecond
 		time.Sleep(10 * time.Millisecond)
 	}
-	a.True(didCancel.Get())
+	a.True(didFinish.Get())
 	a.True(didRun.Get())
-}
-
-func TestRunTaskAndCancelWithPanic(t *testing.T) {
-	a := assert.New(t)
-
-	jm := NewJobManager()
-
-	start := time.Now().UTC()
-	didRun := new(AtomicFlag)
-	didRunToCompletion := new(AtomicFlag)
-	jm.RunTask(NewTaskWithName("taskToCancel", func(ct *CancellationToken) error {
-		didRun.Set(true)
-		time.Sleep(1 * time.Second)
-		didRunToCompletion.Set(true)
-		return nil
-	}))
-
-	for !didRun.Get() {
-		time.Sleep(1 * time.Millisecond)
-	}
-
-	jm.CancelTask("taskToCancel")
-	elapsed := time.Now().UTC().Sub(start)
-
-	a.True(didRun.Get())
-	a.False(didRunToCompletion.Get())
-	a.True(elapsed < (CancellationGracePeriod + 10*time.Millisecond))
 }
 
 func TestRunJobBySchedule(t *testing.T) {
 	a := assert.New(t)
 
 	didRun := new(AtomicFlag)
-	var runCount int32
+	runCount := new(AtomicCounter)
 	jm := NewJobManager()
 	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
-		atomic.AddInt32(&runCount, 1)
+		runCount.Increment()
 		didRun.Set(true)
 		return nil
 	}})
@@ -216,17 +191,17 @@ func TestRunJobBySchedule(t *testing.T) {
 	}
 
 	a.True(didRun.Get())
-	a.Equal(1, runCount)
+	a.Equal(1, runCount.Get())
 }
 
 func TestDisableJob(t *testing.T) {
 	a := assert.New(t)
 
 	didRun := new(AtomicFlag)
-	var runCount int32
+	runCount := new(AtomicCounter)
 	jm := NewJobManager()
 	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
-		atomic.AddInt32(&runCount, 1)
+		runCount.Increment()
 		didRun.Set(true)
 		return nil
 	}})
@@ -251,14 +226,14 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 		RunDelegate: func(ct *CancellationToken) error {
 			didRun.Set(true)
 			for !didCancel.Get() {
-				if ct.ShouldCancel() {
-					didCancel.Set(true)
-					return ct.CanceledGracefully()
-				}
+				ct.CheckCancellation()
 				time.Sleep(10 * time.Millisecond)
 			}
 
 			return nil
+		},
+		CancellationDelegate: func() {
+			didCancel.Set(true)
 		},
 	})
 	jm.Start()

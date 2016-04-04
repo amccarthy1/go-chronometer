@@ -18,9 +18,6 @@ const (
 	// HangingHeartbeatInterval is the interval between schedule next run checks.
 	HangingHeartbeatInterval = 333 * time.Millisecond
 
-	// CancellationGracePeriod is the (default) extra time tasks are given to clean themselves up.
-	CancellationGracePeriod = 500 * time.Millisecond
-
 	//StateRunning is the running state.
 	StateRunning = "running"
 
@@ -406,35 +403,14 @@ func (jm *JobManager) RunTask(t Task) error {
 
 		defer func() {
 			if r := recover(); r != nil {
-				if _, isCancellation := r.(CancellationPanic); !isCancellation {
-					panic(r)
+				if _, isCancellation := r.(CancellationPanic); isCancellation {
+					jm.onTaskCancellation(t)
 				}
 			}
 		}()
 
-		didFinish := new(AtomicFlag)
-		taskFinished := make(chan bool, 1)
-
-		go func() {
-			jm.onTaskStart(t)
-			jm.onTaskComplete(t, t.Execute(ct))
-			didFinish.Set(true)
-			taskFinished <- true
-		}()
-
-		select {
-		case <-ct.cancellationSignal:
-			{
-				time.Sleep(CancellationGracePeriod)
-				if !didFinish.Get() && !ct.DidCancel() {
-					panic(NewCancellationPanic())
-				}
-			}
-		case <-taskFinished:
-			{
-				return
-			}
-		}
+		jm.onTaskStart(t)
+		jm.onTaskComplete(t, t.Execute(ct))
 	}()
 
 	return nil
@@ -449,6 +425,12 @@ func (jm *JobManager) onTaskStart(t Task) {
 func (jm *JobManager) onTaskComplete(t Task, result error) {
 	if receiver, isReceiver := t.(OnCompleteReceiver); isReceiver {
 		receiver.OnComplete(result)
+	}
+}
+
+func (jm *JobManager) onTaskCancellation(t Task) {
+	if receiver, isReceiver := t.(OnCancellationReceiver); isReceiver {
+		receiver.OnCancellation()
 	}
 }
 
@@ -494,7 +476,7 @@ func (jm *JobManager) Stop() {
 }
 
 func (jm *JobManager) runDueJobs(ct *CancellationToken) {
-	for !ct.ShouldCancel() {
+	for !ct.didCancel() {
 		jm.runDueJobsInner()
 		time.Sleep(HeartbeatInterval)
 	}
@@ -519,7 +501,7 @@ func (jm *JobManager) runDueJobsInner() {
 }
 
 func (jm *JobManager) killHangingJobs(ct *CancellationToken) {
-	for !ct.ShouldCancel() {
+	for !ct.didCancel() {
 		jm.killHangingJobsInner()
 		time.Sleep(HangingHeartbeatInterval)
 	}
