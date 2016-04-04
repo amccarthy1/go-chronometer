@@ -40,9 +40,8 @@ func (j *loadTestJob) OnCancellation() {
 func (j *loadTestJob) Status() string {
 	if j.running {
 		return "Request in progress"
-	} else {
-		return "Request idle."
 	}
+	return "Request idle."
 }
 
 func (j *loadTestJob) Schedule() chronometer.Schedule {
@@ -52,8 +51,9 @@ func (j *loadTestJob) Schedule() chronometer.Schedule {
 func main() {
 	for x := 1; x < 1000; x++ {
 		chronometer.Default().LoadJob(&loadTestJob{id: x})
-		fmt.Printf("loaded job %d\n", x)
+		//fmt.Printf("loaded job %d\n", x)
 	}
+	fmt.Printf("Loaded 1000 Job Instances.\n")
 	chronometer.Default().Start()
 
 	time.Sleep(30 * time.Second)
