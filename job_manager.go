@@ -14,8 +14,8 @@ import (
 const (
 	// HeartbeatInterval is the interval between schedule next run checks.
 	HeartbeatInterval = 250 * time.Millisecond
-    
-    // HangingHeartbeatInterval is the interval between schedule next run checks.
+
+	// HangingHeartbeatInterval is the interval between schedule next run checks.
 	HangingHeartbeatInterval = 333 * time.Millisecond
 
 	// CancellationGracePeriod is the (default) extra time tasks are given to clean themselves up.
@@ -398,67 +398,52 @@ func (jm *JobManager) RunTask(t Task) error {
 	jm.SetRunningTaskStartTime(taskName, now)
 	jm.SetLastRunTime(taskName, now)
 
-	didFinish := false
-	taskFinished := make(chan bool, 1)
-    
-    // this is the main goroutine that runs the task
-    // it itself spawns another goroutine
+	// this is the main goroutine that runs the task
+	// it itself spawns another goroutine
 	go func() {
-		// this defer cleans up the task after it runs
-        // this removes things like the start time and the cancellation token etc.
-        defer jm.cleanupTask(taskName)
-        
-        // this defer is only for cancellation panics
-        // the cancellation panic will interupt both the inner goroutine
-        // and this outer goroutine.
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+
 		defer func() {
-			if r := recover(); r != nil { //swallow cancellation exceptions ...
-				if _, isTyped := r.(CancellationException); !isTyped {
-					panic(r) //bubble other panics up
+			jm.cleanupTask(taskName)
+		}()
+
+		defer func() {
+			if r := recover(); r != nil {
+				if _, isCancellation := r.(CancellationPanic); !isCancellation {
+					panic(r)
 				}
 			}
+			wg.Done()
 		}()
-        
-        // this go-routine enforces cancellation grace periods.
-        // after the grace period, we panic with a special object
-        // this object is then caught in the above defer
+
+		didFinish := new(AtomicFlag)
+		taskFinished := make(chan bool, 1)
+
 		go func() {
-			select {
-			case <-ct.cancellationSignal:
-				{
-					time.Sleep(CancellationGracePeriod)
-					if !ct.didCancel && !didFinish {
-						panic(NewCancellationException())
-					}
-				}
-			case <-taskFinished:
-				{
-					return
-				}
-			}
+			jm.onTaskStart(t)
+			jm.onTaskComplete(t, t.Execute(ct))
+			didFinish.Set(true)
+			taskFinished <- true
 		}()
 
-		jm.onTaskStart(t)
-
-		if jm.taskCancellationCheck(t, ct) {
-			return
+		select {
+		case <-ct.cancellationSignal:
+			{
+				time.Sleep(CancellationGracePeriod)
+				if !didFinish.Get() && !ct.DidCancel() {
+					panic(NewCancellationPanic())
+				}
+			}
+		case <-taskFinished:
+			{
+				wg.Done()
+			}
 		}
 
-        // we run the body of the task here.
-		result := t.Execute(ct)
-
-		if jm.taskCancellationCheck(t, ct) {
-			return
-		}
-
-		jm.onTaskComplete(t, result)
-
-		didFinish = true
-        // we use this signal to tell the cancellation routine
-        // that it can exit
-		taskFinished <- true
+		wg.Wait()
 	}()
-    
+
 	return nil
 }
 
@@ -474,16 +459,6 @@ func (jm *JobManager) onTaskComplete(t Task, result error) {
 	}
 }
 
-func (jm *JobManager) taskCancellationCheck(t Task, ct *CancellationToken) bool {
-	if ct.ShouldCancel() {
-		if receiver, isReceiver := t.(OnCancellationReceiver); isReceiver {
-			receiver.OnCancellation()
-		}
-		return true
-	}
-	return false
-}
-
 func (jm *JobManager) cleanupTask(taskName string) {
 	jm.DeleteRunningTaskStartTime(taskName)
 	jm.DeleteRunningTask(taskName)
@@ -497,11 +472,10 @@ func (jm *JobManager) CancelTask(taskName string) error {
 
 	if task, hasTask := jm.runningTasks[taskName]; hasTask {
 		token := jm.GetCancellationToken(taskName)
-		jm.cleanupTask(taskName)
 		if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
 			receiver.OnCancellation()
 		}
-		token.signalCancellation()
+		token.Cancel()
 	}
 	return exception.Newf("Task name `%s` not found.", taskName)
 }
@@ -522,7 +496,7 @@ func (jm *JobManager) Stop() {
 	if !jm.isRunning {
 		return
 	}
-	jm.schedulerToken.signalCancellation()
+	jm.schedulerToken.Cancel()
 	jm.isRunning = false
 }
 
@@ -559,16 +533,16 @@ func (jm *JobManager) killHangingJobs(ct *CancellationToken) {
 }
 
 func (jm *JobManager) killHangingJobsInner() {
-    
-    jm.runningTasksLock.Lock()
+
+	jm.runningTasksLock.Lock()
 	defer jm.runningTasksLock.Unlock()
-    
+
 	jm.runningTaskStartTimesLock.Lock()
 	defer jm.runningTaskStartTimesLock.Unlock()
 
-    jm.cancellationTokensLock.Lock()
-    defer jm.cancellationTokensLock.Unlock()
-    
+	jm.cancellationTokensLock.Lock()
+	defer jm.cancellationTokensLock.Unlock()
+
 	now := time.Now().UTC()
 
 	for taskName, startedTime := range jm.runningTaskStartTimes {
@@ -587,22 +561,21 @@ func (jm *JobManager) killHangingJobsInner() {
 func (jm *JobManager) killHangingJob(taskName string) error {
 	if task, hasTask := jm.runningTasks[taskName]; hasTask {
 		if token, hasToken := jm.cancellationTokens[taskName]; hasToken {
-            defer func() {
-                token.signalCancellation()
-                
-                delete(jm.runningTasks, taskName)
-                delete(jm.runningTaskStartTimes, taskName)
-                delete(jm.cancellationTokens, taskName)
-            }()
-            
-            if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
-                receiver.OnCancellation()
-            }
-        }
+			defer func() {
+				token.Cancel()
+
+				delete(jm.runningTasks, taskName)
+				delete(jm.runningTaskStartTimes, taskName)
+				delete(jm.cancellationTokens, taskName)
+			}()
+
+			if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
+				receiver.OnCancellation()
+			}
+		}
 	}
 	return exception.Newf("Task name `%s` not found.", taskName)
 }
-
 
 // Status returns the status metadata for a JobManager
 func (jm *JobManager) Status() []TaskStatus {
