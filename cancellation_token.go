@@ -3,6 +3,7 @@ package chronometer
 import (
 	"sync"
 
+	"github.com/blendlabs/go-chronometer"
 	"github.com/blendlabs/go-exception"
 )
 
@@ -20,6 +21,17 @@ type CancellationPanic error
 // NewCancellationPanic returns a new cancellation exception.
 func NewCancellationPanic() error {
 	return CancellationPanic(exception.New("Cancellation grace period expired."))
+}
+
+// HandleCancellationPanic is a method to use in your
+// execution handlers that handles and forwards the CancellationPanic
+func HandleCancellationPanic(handler func()) {
+	if r := recover(); r != nil {
+		if _, isCancellation := r.(chronometer.CancellationPanic); isCancellation {
+			handler()
+			panic(r)
+		}
+	}
 }
 
 // CancellationToken are the signalling mechanism chronometer uses to tell tasks that they should stop work.
