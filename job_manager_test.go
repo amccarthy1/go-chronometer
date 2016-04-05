@@ -220,6 +220,7 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	start := time.Now().UTC()
 	didRun := new(AtomicFlag)
 	didCancel := new(AtomicFlag)
+	cancelCount := new(AtomicCounter)
 	jm.LoadJob(&testJobWithTimeout{
 		RunAt:           start,
 		TimeoutDuration: 100 * time.Millisecond,
@@ -233,6 +234,7 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 			return nil
 		},
 		CancellationDelegate: func() {
+			cancelCount.Increment()
 			didCancel.Set(true)
 		},
 	})
@@ -247,6 +249,8 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 
 	a.True(didRun.Get())
 	a.True(didCancel.Get())
+	a.Equal(1, cancelCount.Get())
+
 	// elapsed should be less than the timeout + (2 heartbeat intervals)
 	a.True(elapsed < (100+(HangingHeartbeatInterval*2))*time.Millisecond, fmt.Sprintf("%v", elapsed))
 }
