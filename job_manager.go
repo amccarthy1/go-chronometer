@@ -447,9 +447,7 @@ func (jm *JobManager) CancelTask(taskName string) error {
 
 	if task, hasTask := jm.runningTasks[taskName]; hasTask {
 		token := jm.GetCancellationToken(taskName)
-		if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
-			receiver.OnCancellation()
-		}
+		jm.onTaskCancellation(task)
 		token.Cancel()
 	}
 	return exception.Newf("Task name `%s` not found.", taskName)
@@ -538,18 +536,13 @@ func (jm *JobManager) killHangingJobsInner() {
 // - runningTaskStartTimesLock
 // - cancellationTokensLock
 func (jm *JobManager) killHangingJob(taskName string) error {
-	if task, hasTask := jm.runningTasks[taskName]; hasTask {
+	if _, hasTask := jm.runningTasks[taskName]; hasTask {
 		if token, hasToken := jm.cancellationTokens[taskName]; hasToken {
-			fmt.Printf("%v - JOB MANAGER :: Killing hanging task: %v\n", time.Now().Format(time.RFC3339), taskName)
 			token.Cancel()
 
 			delete(jm.runningTasks, taskName)
 			delete(jm.runningTaskStartTimes, taskName)
 			delete(jm.cancellationTokens, taskName)
-
-			if receiver, isReceiver := task.(OnCancellationReceiver); isReceiver {
-				receiver.OnCancellation()
-			}
 		}
 	}
 	return exception.Newf("Task name `%s` not found.", taskName)

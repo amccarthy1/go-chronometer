@@ -11,7 +11,7 @@ import (
 
 const (
 	// N is the number of jobs to load.
-	N = 1
+	N = 1000
 
 	// Q is the total simulation time.
 	Q = 30 * time.Second
@@ -33,6 +33,10 @@ var startedCount = new(chronometer.AtomicCounter)
 var completeCount = new(chronometer.AtomicCounter)
 var timeoutCount = new(chronometer.AtomicCounter)
 
+func ts() string {
+	return time.Now().String()
+}
+
 type loadTestJob struct {
 	id      int
 	running bool
@@ -48,22 +52,28 @@ func (j *loadTestJob) Name() string {
 }
 
 func (j *loadTestJob) Execute(ct *chronometer.CancellationToken) error {
-	j.started = time.Now()
+	started := time.Now()
 	startedCount.Increment()
 	j.running = true
-	if rand.Float64() < 0.5 { // 50% split between short vs. long.
-		time.Sleep(JobShortRunTime)
+
+	var runFor time.Duration
+	var randValue = rand.Float64()
+	if randValue <= 0.5 { // 50% split between short vs. long.
+		runFor = JobShortRunTime
 	} else {
-		time.Sleep(JobLongRunTime)
+		runFor = JobLongRunTime
+	}
+
+	for time.Now().Sub(started) < runFor {
+		ct.CheckCancellation()
+		time.Sleep(10 * time.Millisecond)
 	}
 	j.running = false
 	completeCount.Increment()
-	fmt.Printf("%v - Complete @ %v\n", time.Now().Format(time.RFC3339), time.Now().Sub(j.started))
 	return nil
 }
 
 func (j *loadTestJob) OnCancellation() {
-	fmt.Printf("%v - Timeout @ %v\n", time.Now().Format(time.RFC3339), time.Now().Sub(j.started))
 	timeoutCount.Increment()
 	j.running = false
 }

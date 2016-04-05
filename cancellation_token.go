@@ -46,5 +46,7 @@ func (ct *CancellationToken) didCancel() bool {
 func (ct *CancellationToken) CheckCancellation() {
 	ct.shouldCancelLock.RLock()
 	defer ct.shouldCancelLock.RUnlock()
-	panic(NewCancellationPanic())
+	if ct.shouldCancel {
+		panic(NewCancellationPanic())
+	}
 }
