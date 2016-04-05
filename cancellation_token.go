@@ -3,7 +3,6 @@ package chronometer
 import (
 	"sync"
 
-	"github.com/blendlabs/go-chronometer"
 	"github.com/blendlabs/go-exception"
 )
 
@@ -27,7 +26,7 @@ func NewCancellationPanic() error {
 // execution handlers that handles and forwards the CancellationPanic
 func HandleCancellationPanic(handler func()) {
 	if r := recover(); r != nil {
-		if _, isCancellation := r.(chronometer.CancellationPanic); isCancellation {
+		if _, isCancellation := r.(CancellationPanic); isCancellation {
 			handler()
 			panic(r)
 		}
