@@ -38,7 +38,7 @@ func NewJobManager() *JobManager {
 		runningTaskStartTimes: map[string]time.Time{},
 		lastRunTimes:          map[string]time.Time{},
 		nextRunTimes:          map[string]*time.Time{},
-		disabledJobs:          collections.StringSet{},
+		disabledJobs:          collections.SetOfString{},
 	}
 
 	return &jm
@@ -66,7 +66,7 @@ type JobManager struct {
 	loadedJobs     map[string]Job
 
 	disabledJobsLock sync.RWMutex
-	disabledJobs     collections.StringSet
+	disabledJobs     collections.SetOfString
 
 	runningTasksLock sync.RWMutex
 	runningTasks     map[string]Task
@@ -94,188 +94,169 @@ type JobManager struct {
 // Atomic Methods
 // --------------------------------------------------------------------------------
 
-// GetCancellationToken gets jm.cancellationTokens
-func (jm *JobManager) GetCancellationToken(jobName string) *CancellationToken {
+func (jm *JobManager) getCancellationToken(jobName string) *CancellationToken {
 	jm.cancellationTokensLock.Lock()
 	defer jm.cancellationTokensLock.Unlock()
 
 	return jm.cancellationTokens[jobName]
 }
 
-// SetCancellationToken sets jm.cancellationTokens
-func (jm *JobManager) SetCancellationToken(jobName string, t *CancellationToken) {
+func (jm *JobManager) setCancellationToken(jobName string, t *CancellationToken) {
 	jm.cancellationTokensLock.Lock()
 	defer jm.cancellationTokensLock.Unlock()
 
 	jm.cancellationTokens[jobName] = t
 }
 
-// DeleteCancellationToken deletes jm.cancellationTokens
-func (jm *JobManager) DeleteCancellationToken(jobName string) {
+func (jm *JobManager) deleteCancellationToken(jobName string) {
 	jm.cancellationTokensLock.Lock()
 	defer jm.cancellationTokensLock.Unlock()
 
 	delete(jm.cancellationTokens, jobName)
 }
 
-// SetDisabledJob sets jm.disabledJobs
-func (jm *JobManager) SetDisabledJob(jobName string) {
+func (jm *JobManager) setDisabledJob(jobName string) {
 	jm.disabledJobsLock.Lock()
 	defer jm.disabledJobsLock.Unlock()
 
 	jm.disabledJobs.Add(jobName)
 }
 
-// DeleteDisabledJob deletes jm.disabledJobs
-func (jm *JobManager) DeleteDisabledJob(jobName string) {
+func (jm *JobManager) deleteDisabledJob(jobName string) {
 	jm.disabledJobsLock.Lock()
 	defer jm.disabledJobsLock.Unlock()
 
 	jm.disabledJobs.Remove(jobName)
 }
 
-// GetNextRunTime gets jm.nextRunTimes
-func (jm *JobManager) GetNextRunTime(jobName string) *time.Time {
+func (jm *JobManager) getNextRunTime(jobName string) *time.Time {
 	jm.nextRunTimesLock.Lock()
 	defer jm.nextRunTimesLock.Unlock()
 
 	return jm.nextRunTimes[jobName]
 }
 
-// SetNextRunTime sets jm.nextRunTimes
-func (jm *JobManager) SetNextRunTime(jobName string, t *time.Time) {
+func (jm *JobManager) setNextRunTime(jobName string, t *time.Time) {
 	jm.nextRunTimesLock.Lock()
 	defer jm.nextRunTimesLock.Unlock()
 
 	jm.nextRunTimes[jobName] = t
 }
 
-// DeleteNextRunTime deletes jm.nextRunTimes
-func (jm *JobManager) DeleteNextRunTime(jobName string) {
+func (jm *JobManager) deleteNextRunTime(jobName string) {
 	jm.nextRunTimesLock.Lock()
 	defer jm.nextRunTimesLock.Unlock()
 
 	delete(jm.nextRunTimes, jobName)
 }
 
-// GetLastRunTime gets jm.LastRunTimes
-func (jm *JobManager) GetLastRunTime(taskName string) time.Time {
+func (jm *JobManager) getLastRunTime(taskName string) time.Time {
 	jm.lastRunTimesLock.RLock()
 	defer jm.lastRunTimesLock.RUnlock()
 
 	return jm.lastRunTimes[taskName]
 }
 
-// SetLastRunTime sets jm.LastRunTimes
-func (jm *JobManager) SetLastRunTime(taskName string, t time.Time) {
+func (jm *JobManager) setLastRunTime(taskName string, t time.Time) {
 	jm.lastRunTimesLock.Lock()
 	defer jm.lastRunTimesLock.Unlock()
 
 	jm.lastRunTimes[taskName] = t
 }
 
-// DeleteLastRunTime deletes jm.LastRunTimes
-func (jm *JobManager) DeleteLastRunTime(taskName string) {
+func (jm *JobManager) deleteLastRunTime(taskName string) {
 	jm.lastRunTimesLock.Lock()
 	defer jm.lastRunTimesLock.Unlock()
 
 	delete(jm.lastRunTimes, taskName)
 }
 
-// GetLoadedJob gets a job
-func (jm *JobManager) GetLoadedJob(jobName string) Job {
+func (jm *JobManager) getLoadedJob(jobName string) Job {
 	jm.loadedJobsLock.RLock()
 	defer jm.loadedJobsLock.RUnlock()
 	return jm.loadedJobs[jobName]
 }
 
-// SetLoadedJob sets jm.loadedJobs
-func (jm *JobManager) SetLoadedJob(jobName string, j Job) {
+func (jm *JobManager) setLoadedJob(jobName string, j Job) {
 	jm.loadedJobsLock.Lock()
 	defer jm.loadedJobsLock.Unlock()
 
 	jm.loadedJobs[jobName] = j
 }
 
-// DeleteLoadedJob deletes jm.loadedJobs
-func (jm *JobManager) DeleteLoadedJob(jobName string) {
+func (jm *JobManager) deleteLoadedJob(jobName string) {
 	jm.loadedJobsLock.Lock()
 	defer jm.loadedJobsLock.Unlock()
 
 	delete(jm.loadedJobs, jobName)
 }
 
-// GetRunningTask gets jm.runningTasks
-func (jm *JobManager) GetRunningTask(taskName string) Task {
+func (jm *JobManager) getRunningTask(taskName string) Task {
 	jm.runningTasksLock.RLock()
 	defer jm.runningTasksLock.RUnlock()
 
 	return jm.runningTasks[taskName]
 }
 
-// SetRunningTask sets jm.runningTasks
-func (jm *JobManager) SetRunningTask(taskName string, t Task) {
+func (jm *JobManager) setRunningTask(taskName string, t Task) {
 	jm.runningTasksLock.Lock()
 	defer jm.runningTasksLock.Unlock()
 
 	jm.runningTasks[taskName] = t
 }
 
-// DeleteRunningTask deletes jm.runningTasks
-func (jm *JobManager) DeleteRunningTask(taskName string) {
+func (jm *JobManager) deleteRunningTask(taskName string) {
 	jm.runningTasksLock.Lock()
 	defer jm.runningTasksLock.Unlock()
 
 	delete(jm.runningTasks, taskName)
 }
 
-// GetRunningTaskStartTime gets jm.runningTaskStartTimess
-func (jm *JobManager) GetRunningTaskStartTime(taskName string) time.Time {
+func (jm *JobManager) getRunningTaskStartTime(taskName string) time.Time {
 	jm.runningTaskStartTimesLock.RLock()
 	defer jm.runningTaskStartTimesLock.RUnlock()
 
 	return jm.runningTaskStartTimes[taskName]
 }
 
-// SetRunningTaskStartTime sets jm.runningTaskStartTimess
-func (jm *JobManager) SetRunningTaskStartTime(taskName string, t time.Time) {
+func (jm *JobManager) setRunningTaskStartTime(taskName string, t time.Time) {
 	jm.runningTaskStartTimesLock.Lock()
 	defer jm.runningTaskStartTimesLock.Unlock()
 
 	jm.runningTaskStartTimes[taskName] = t
 }
 
-// DeleteRunningTaskStartTime deletes jm.runningTaskStartTimes
-func (jm *JobManager) DeleteRunningTaskStartTime(taskName string) {
+func (jm *JobManager) deleteRunningTaskStartTime(taskName string) {
 	jm.runningTaskStartTimesLock.Lock()
 	defer jm.runningTaskStartTimesLock.Unlock()
 
 	delete(jm.runningTaskStartTimes, taskName)
 }
 
-// GetSchedule gets jm.schedules
-func (jm *JobManager) GetSchedule(jobName string) Schedule {
+func (jm *JobManager) getSchedule(jobName string) Schedule {
 	jm.schedulesLock.RLock()
 	defer jm.schedulesLock.RUnlock()
 
 	return jm.schedules[jobName]
 }
 
-// SetSchedule sets jm.schedules
-func (jm *JobManager) SetSchedule(jobName string, schedule Schedule) {
+func (jm *JobManager) setSchedule(jobName string, schedule Schedule) {
 	jm.schedulesLock.Lock()
 	defer jm.schedulesLock.Unlock()
 
 	jm.schedules[jobName] = schedule
 }
 
-// DeleteSchedule deltes jm.schedules
-func (jm *JobManager) DeleteSchedule(jobName string) {
+func (jm *JobManager) deleteSchedule(jobName string) {
 	jm.schedulesLock.Lock()
 	defer jm.schedulesLock.Unlock()
 
 	delete(jm.schedules, jobName)
 }
+
+// --------------------------------------------------------------------------------
+// Informational Methods
+// --------------------------------------------------------------------------------
 
 // HasJob returns if a jobName is loaded or not.
 func (jm *JobManager) HasJob(jobName string) bool {
@@ -302,8 +283,15 @@ func (jm *JobManager) IsRunning(taskName string) bool {
 	return isRunning
 }
 
+// ReadAllJobs allows the consumer to do something with the full job list, using a read lock.
+func (jm *JobManager) ReadAllJobs(action func(jobs map[string]Job)) {
+	jm.loadedJobsLock.RLock()
+	defer jm.loadedJobsLock.RUnlock()
+	action(jm.loadedJobs)
+}
+
 // --------------------------------------------------------------------------------
-// END Atomic methods
+// Core Methods
 // --------------------------------------------------------------------------------
 
 // LoadJob adds a job to the manager.
@@ -314,12 +302,10 @@ func (jm *JobManager) LoadJob(j Job) error {
 		return exception.Newf("Job name `%s` already loaded.", j.Name())
 	}
 
-	jm.SetLoadedJob(jobName, j)
-
+	jm.setLoadedJob(jobName, j)
 	jobSchedule := j.Schedule()
-	jm.SetSchedule(jobName, jobSchedule)
-	jm.SetNextRunTime(jobName, jobSchedule.GetNextRunTime(nil))
-
+	jm.setSchedule(jobName, jobSchedule)
+	jm.setNextRunTime(jobName, jobSchedule.GetNextRunTime(nil))
 	return nil
 }
 
@@ -329,8 +315,8 @@ func (jm *JobManager) DisableJob(jobName string) error {
 		return exception.Newf("Job name `%s` isn't loaded.", jobName)
 	}
 
-	jm.SetDisabledJob(jobName)
-	jm.DeleteNextRunTime(jobName)
+	jm.setDisabledJob(jobName)
+	jm.deleteNextRunTime(jobName)
 	return nil
 }
 
@@ -340,10 +326,10 @@ func (jm *JobManager) EnableJob(jobName string) error {
 		return exception.Newf("Job name `%s` isn't loaded.", jobName)
 	}
 
-	jm.DeleteDisabledJob(jobName)
-	job := jm.GetLoadedJob(jobName)
+	jm.deleteDisabledJob(jobName)
+	job := jm.getLoadedJob(jobName)
 	jobSchedule := job.Schedule()
-	jm.SetNextRunTime(jobName, jobSchedule.GetNextRunTime(nil))
+	jm.setNextRunTime(jobName, jobSchedule.GetNextRunTime(nil))
 
 	return nil
 }
@@ -359,7 +345,7 @@ func (jm *JobManager) RunJob(jobName string) error {
 	if job, hasJob := jm.loadedJobs[jobName]; hasJob {
 		if !jm.disabledJobs.Contains(jobName) {
 			now := time.Now().UTC()
-			jm.SetLastRunTime(jobName, now)
+			jm.setLastRunTime(jobName, now)
 			return jm.RunTask(job)
 		}
 		return nil
@@ -389,10 +375,10 @@ func (jm *JobManager) RunTask(t Task) error {
 	ct := NewCancellationToken()
 	now := time.Now().UTC()
 
-	jm.SetRunningTask(taskName, t)
-	jm.SetCancellationToken(taskName, ct)
-	jm.SetRunningTaskStartTime(taskName, now)
-	jm.SetLastRunTime(taskName, now)
+	jm.setRunningTask(taskName, t)
+	jm.setCancellationToken(taskName, ct)
+	jm.setRunningTaskStartTime(taskName, now)
+	jm.setLastRunTime(taskName, now)
 
 	// this is the main goroutine that runs the task
 	// it itself spawns another goroutine
@@ -435,9 +421,9 @@ func (jm *JobManager) onTaskCancellation(t Task) {
 }
 
 func (jm *JobManager) cleanupTask(taskName string) {
-	jm.DeleteRunningTaskStartTime(taskName)
-	jm.DeleteRunningTask(taskName)
-	jm.DeleteCancellationToken(taskName)
+	jm.deleteRunningTaskStartTime(taskName)
+	jm.deleteRunningTask(taskName)
+	jm.deleteCancellationToken(taskName)
 }
 
 // CancelTask cancels (sends the cancellation signal) to a running task.
@@ -446,7 +432,7 @@ func (jm *JobManager) CancelTask(taskName string) error {
 	defer jm.runningTasksLock.RUnlock()
 
 	if task, hasTask := jm.runningTasks[taskName]; hasTask {
-		token := jm.GetCancellationToken(taskName)
+		token := jm.getCancellationToken(taskName)
 		jm.onTaskCancellation(task)
 		token.Cancel()
 	}
@@ -490,7 +476,7 @@ func (jm *JobManager) runDueJobsInner() {
 		if nextRunTime != nil {
 			if !jm.IsDisabled(jobName) {
 				if nextRunTime.Before(now) {
-					jm.nextRunTimes[jobName] = jm.GetSchedule(jobName).GetNextRunTime(&now)
+					jm.nextRunTimes[jobName] = jm.getSchedule(jobName).GetNextRunTime(&now)
 					jm.RunJob(jobName)
 				}
 			}
@@ -532,9 +518,10 @@ func (jm *JobManager) killHangingJobsInner() {
 
 // killHangingJob cancels (sends the cancellation signal) to a running task that has exceeded its timeout.
 // it assumes that the following locks are held:
-// - runningTasksLock
-// - runningTaskStartTimesLock
-// - cancellationTokensLock
+// - runningTasksLock (write)
+// - runningTaskStartTimesLock (write)
+// - cancellationTokensLock (write)
+// otherwise, chaos, mayhem, deadlocks. You should *rarely* need to call this explicitly.
 func (jm *JobManager) killHangingJob(taskName string) error {
 	if _, hasTask := jm.runningTasks[taskName]; hasTask {
 		if token, hasToken := jm.cancellationTokens[taskName]; hasToken {
