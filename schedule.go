@@ -32,12 +32,12 @@ const (
 
 // IsWeekDay returns if the day is a monday->friday.
 func IsWeekDay(day time.Weekday) bool {
-	return WeekDaysMask&uint(day) > uint(0)
+	return WeekDaysMask&1<<uint(day) > uint(0)
 }
 
 // IsWeekendDay returns if the day is a monday->friday.
 func IsWeekendDay(day time.Weekday) bool {
-	return WeekendDaysMask&uint(day) > uint(0)
+	return WeekendDaysMask&1<<uint(day) > uint(0)
 }
 
 // The Schedule interface defines the form a schedule should take. All schedules are resposible for is giving a next run time after a last run time.
