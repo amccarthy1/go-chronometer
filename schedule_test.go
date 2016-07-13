@@ -51,3 +51,17 @@ func TestDailyScheduleSingleDay(t *testing.T) {
 	a.NonFatal().True(nextWeekAtNoon.After(sundayBeforeNoon))
 	a.NonFatal().Equal(time.Monday, nextWeekAtNoon.Weekday())
 }
+
+func TestDayOfWeekFunctions(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, wd := range WeekendDays {
+		assert.True(IsWeekendDay(wd))
+		assert.False(IsWeekDay(wd))
+	}
+
+	for _, wd := range WeekDays {
+		assert.False(IsWeekendDay(wd))
+		assert.True(IsWeekDay(wd))
+	}
+}

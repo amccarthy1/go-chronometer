@@ -15,6 +15,21 @@ var (
 		time.Saturday,
 	}
 
+	// WeekDays are the business time.Weekday in an array.
+	WeekDays = []time.Weekday{
+		time.Monday,
+		time.Tuesday,
+		time.Wednesday,
+		time.Thursday,
+		time.Friday,
+	}
+
+	// WeekWeekEndDaysDays are the weekend time.Weekday in an array.
+	WeekendDays = []time.Weekday{
+		time.Sunday,
+		time.Saturday,
+	}
+
 	//Epoch is unix epoc saved for utility purposes.
 	Epoch = time.Unix(0, 0)
 )
@@ -32,12 +47,12 @@ const (
 
 // IsWeekDay returns if the day is a monday->friday.
 func IsWeekDay(day time.Weekday) bool {
-	return WeekDaysMask&1<<uint(day) > uint(0)
+	return !IsWeekendDay(day)
 }
 
 // IsWeekendDay returns if the day is a monday->friday.
 func IsWeekendDay(day time.Weekday) bool {
-	return WeekendDaysMask&1<<uint(day) > uint(0)
+	return day == time.Saturday || day == time.Sunday
 }
 
 // The Schedule interface defines the form a schedule should take. All schedules are resposible for is giving a next run time after a last run time.
