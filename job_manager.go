@@ -88,6 +88,22 @@ type JobManager struct {
 
 	isRunning      bool
 	schedulerToken *CancellationToken
+
+	taskListeners []TaskListener
+}
+
+// Event/Listener Methods
+
+// AddTaskListener adds a task listener.
+func (jm *JobManager) AddTaskListener(listener TaskListener) {
+	jm.taskListeners = append(jm.taskListeners, listener)
+}
+
+// fireTaskListeners fires the currently configured task listeners.
+func (jm *JobManager) fireTaskListeners(taskName string, elapsed time.Duration, err error) {
+	for x := 0; x < len(jm.taskListeners); x++ {
+		go jm.taskListeners[x](taskName, elapsed, err)
+	}
 }
 
 // --------------------------------------------------------------------------------
@@ -209,18 +225,20 @@ func (jm *JobManager) RunAllJobs() error {
 func (jm *JobManager) RunTask(t Task) error {
 	taskName := t.Name()
 	ct := NewCancellationToken()
-	now := time.Now().UTC()
+	start := time.Now().UTC()
 
 	jm.setRunningTask(taskName, t)
 	jm.setCancellationToken(taskName, ct)
-	jm.setRunningTaskStartTime(taskName, now)
-	jm.setLastRunTime(taskName, now)
+	jm.setRunningTaskStartTime(taskName, start)
+	jm.setLastRunTime(taskName, start)
 
 	// this is the main goroutine that runs the task
 	// it itself spawns another goroutine
 	go func() {
+		var err error
 		defer func() {
 			jm.cleanupTask(taskName)
+			jm.fireTaskListeners(taskName, time.Now().UTC().Sub(start), err)
 		}()
 
 		defer func() {
@@ -232,7 +250,8 @@ func (jm *JobManager) RunTask(t Task) error {
 		}()
 
 		jm.onTaskStart(t)
-		jm.onTaskComplete(t, t.Execute(ct))
+		err = t.Execute(ct)
+		jm.onTaskComplete(t, err)
 	}()
 
 	return nil

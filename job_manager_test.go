@@ -1,7 +1,9 @@
 package chronometer
 
 import (
+	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -316,4 +318,54 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 	expected := int64(runFor) / int64(HeartbeatInterval)
 
 	a.True(int64(runCount.Get()) >= expected, fmt.Sprintf("%d vs. %d\n", runCount, expected))
+}
+
+func TestJobManagerTaskListener(t *testing.T) {
+	assert := assert.New(t)
+
+	jm := NewJobManager()
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	jm.AddTaskListener(func(taskName string, elapsed time.Duration, err error) {
+		defer wg.Done()
+		assert.Equal("test_task", taskName)
+		assert.NotZero(elapsed)
+		assert.Nil(err)
+	})
+
+	var didRun bool
+	jm.RunTask(NewTaskWithName("test_task", func(ct *CancellationToken) error {
+		defer wg.Done()
+		didRun = true
+		return nil
+	}))
+	wg.Wait()
+
+	assert.True(didRun)
+}
+
+func TestJobManagerTaskListenerWithError(t *testing.T) {
+	assert := assert.New(t)
+
+	jm := NewJobManager()
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	jm.AddTaskListener(func(taskName string, elapsed time.Duration, err error) {
+		defer wg.Done()
+		assert.Equal("test_task", taskName)
+		assert.NotZero(elapsed)
+		assert.NotNil(err)
+	})
+
+	var didRun bool
+	jm.RunTask(NewTaskWithName("test_task", func(ct *CancellationToken) error {
+		defer wg.Done()
+		didRun = true
+		return errors.New("testError")
+	}))
+	wg.Wait()
+
+	assert.True(didRun)
 }
