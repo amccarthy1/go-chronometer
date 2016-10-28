@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/blendlabs/go-assert"
+	logger "github.com/blendlabs/go-logger"
 )
 
 type testJob struct {
@@ -327,12 +328,14 @@ func TestJobManagerTaskListener(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	jm.AddTaskListener(func(taskName string, elapsed time.Duration, err error) {
+	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone()))
+	jm.Diagnostics().EnableEvent(EventFlagTask)
+	jm.Diagnostics().AddEventListener(EventFlagTask, NewTaskListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
 		assert.Equal("test_task", taskName)
 		assert.NotZero(elapsed)
 		assert.Nil(err)
-	})
+	}))
 
 	var didRun bool
 	jm.RunTask(NewTaskWithName("test_task", func(ct *CancellationToken) error {
@@ -352,12 +355,14 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	jm.AddTaskListener(func(taskName string, elapsed time.Duration, err error) {
+	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone()))
+	jm.Diagnostics().EnableEvent(EventFlagTask)
+	jm.Diagnostics().AddEventListener(EventFlagTask, NewTaskListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
 		assert.Equal("test_task", taskName)
 		assert.NotZero(elapsed)
 		assert.NotNil(err)
-	})
+	}))
 
 	var didRun bool
 	jm.RunTask(NewTaskWithName("test_task", func(ct *CancellationToken) error {

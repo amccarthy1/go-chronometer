@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/blendlabs/go-exception"
+	logger "github.com/blendlabs/go-logger"
 	"github.com/blendlabs/go-util/collections"
 )
 
@@ -26,6 +27,9 @@ const (
 
 	// StateDisabled is the disabled state.
 	StateDisabled = "disabled"
+
+	// EventFlagTask is a logger diagnostics event for task completions.
+	EventFlagTask logger.EventFlag = "chronometer.task"
 )
 
 // NewJobManager returns a new instance of JobManager.
@@ -89,21 +93,25 @@ type JobManager struct {
 	isRunning      bool
 	schedulerToken *CancellationToken
 
-	taskListeners []TaskListener
+	diagnostics *logger.DiagnosticsAgent
 }
 
-// Event/Listener Methods
+// Diagnostics returns the diagnostics agent.
+func (jm *JobManager) Diagnostics() *logger.DiagnosticsAgent {
+	return jm.diagnostics
+}
 
-// AddTaskListener adds a task listener.
-func (jm *JobManager) AddTaskListener(listener TaskListener) {
-	jm.taskListeners = append(jm.taskListeners, listener)
+// SetDiagnostics sets the diagnostics agent.
+func (jm *JobManager) SetDiagnostics(agent *logger.DiagnosticsAgent) {
+	jm.diagnostics = agent
 }
 
 // fireTaskListeners fires the currently configured task listeners.
 func (jm *JobManager) fireTaskListeners(taskName string, elapsed time.Duration, err error) {
-	for x := 0; x < len(jm.taskListeners); x++ {
-		go jm.taskListeners[x](taskName, elapsed, err)
+	if jm.diagnostics == nil {
+		return
 	}
+	jm.diagnostics.OnEvent(EventFlagTask, taskName, elapsed, err)
 }
 
 // --------------------------------------------------------------------------------
