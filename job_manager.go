@@ -121,25 +121,24 @@ func (jm *JobManager) fireTaskListeners(taskName string, elapsed time.Duration, 
 // HasJob returns if a jobName is loaded or not.
 func (jm *JobManager) HasJob(jobName string) bool {
 	jm.loadedJobsLock.RLock()
-	defer jm.loadedJobsLock.RUnlock()
 	_, hasJob := jm.loadedJobs[jobName]
+	jm.loadedJobsLock.RUnlock()
 	return hasJob
 }
 
 // IsDisabled returns if a job is disabled.
-func (jm *JobManager) IsDisabled(jobName string) bool {
+func (jm *JobManager) IsDisabled(jobName string) (value bool) {
 	jm.disabledJobsLock.RLock()
-	defer jm.disabledJobsLock.RUnlock()
-
-	return jm.disabledJobs.Contains(jobName)
+	value = jm.disabledJobs.Contains(jobName)
+	jm.disabledJobsLock.RUnlock()
+	return
 }
 
 // IsRunning returns if a task is currently running.
 func (jm *JobManager) IsRunning(taskName string) bool {
 	jm.runningTasksLock.RLock()
-	defer jm.runningTasksLock.RUnlock()
-
 	_, isRunning := jm.runningTasks[taskName]
+	jm.runningTasksLock.RUnlock()
 	return isRunning
 }
 
