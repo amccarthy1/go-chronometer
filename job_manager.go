@@ -27,20 +27,7 @@ const (
 
 	// StateDisabled is the disabled state.
 	StateDisabled = "disabled"
-
-	// EventTaskComplete is a logger diagnostics event for task completions.
-	EventTaskComplete logger.EventFlag = "chronometer.task"
 )
-
-// EventTaskCompleteListener is a listener for task complete events.
-type EventTaskCompleteListener func(w logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error)
-
-// NewEventTaskCompleteListener returns a new event listener for task complete events.
-func NewEventTaskCompleteListener(listener EventTaskCompleteListener) logger.EventListener {
-	return func(w logger.Logger, ts logger.TimeSource, ef logger.EventFlag, state ...interface{}) {
-		listener(w, ts, state[0].(string), state[1].(time.Duration), state[2].(error))
-	}
-}
 
 // NewJobManager returns a new instance of JobManager.
 func NewJobManager() *JobManager {
