@@ -91,11 +91,6 @@ func EveryHourOnTheHour() Schedule {
 	return OnTheHour{}
 }
 
-// Immediately Returns a schedule that casues a job to run immediately after completion.
-func Immediately() Schedule {
-	return ImmediateSchedule{}
-}
-
 // WeeklyAt returns a schedule that fires on every of the given days at the given time by hour, minute and second.
 func WeeklyAt(hour, minute, second int, days ...time.Weekday) Schedule {
 	dayOfWeekMask := uint(0)
@@ -125,12 +120,22 @@ func WeekendsAt(hour, minute, second int) Schedule {
 // Schedule Implementations
 // --------------------------------------------------------------------------------
 
+// OnDemand returns an on demand schedule.
+func OnDemand() Schedule {
+	return OnDemandSchedule{}
+}
+
 // OnDemandSchedule is a schedule that runs on demand.
 type OnDemandSchedule struct{}
 
 // GetNextRunTime gets the next run time.
 func (ods OnDemandSchedule) GetNextRunTime(after *time.Time) *time.Time {
 	return nil
+}
+
+// Immediately Returns a schedule that casues a job to run immediately after completion.
+func Immediately() Schedule {
+	return ImmediateSchedule{}
 }
 
 // ImmediateSchedule fires immediately.
