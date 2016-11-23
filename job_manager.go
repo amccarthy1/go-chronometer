@@ -98,9 +98,35 @@ func (jm *JobManager) Diagnostics() *logger.DiagnosticsAgent {
 	return jm.diagnostics
 }
 
+func (jm *JobManager) showMessagesFor(taskName string) bool {
+	if job, hasJob := jm.loadedJobs[taskName]; hasJob {
+		if typed, isTyped := job.(ShowMessagesProvider); isTyped {
+			return typed.ShowMessages()
+		}
+	}
+
+	return true
+}
+
 // SetDiagnostics sets the diagnostics agent.
 func (jm *JobManager) SetDiagnostics(agent *logger.DiagnosticsAgent) {
 	jm.diagnostics = agent
+
+	jm.diagnostics.AddEventListener(EventTask, NewTaskListener(func(wr logger.Logger, ts logger.TimeSource, taskName string) {
+		if jm.showMessagesFor(taskName) {
+			logger.WriteEventf(wr, ts, EventTask, logger.ColorBlue, "`%s` starting", taskName)
+		}
+	}))
+
+	jm.diagnostics.AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(wr logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error) {
+		if jm.showMessagesFor(taskName) {
+			if err != nil {
+				logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorRed, "`%s` failed %v", taskName, elapsed)
+			} else {
+				logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorBlue, "`%s` completed %v", taskName, elapsed)
+			}
+		}
+	}))
 }
 
 // fireTaskListeners fires the currently configured task listeners.

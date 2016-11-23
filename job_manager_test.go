@@ -1,6 +1,7 @@
 package chronometer
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -328,7 +329,8 @@ func TestJobManagerTaskListener(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone()))
+	output := bytes.NewBuffer(nil)
+	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone(), logger.NewLogWriter(output)))
 	jm.Diagnostics().EnableEvent(EventTaskComplete)
 	jm.Diagnostics().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
@@ -355,7 +357,9 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone()))
+
+	output := bytes.NewBuffer(nil)
+	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone(), logger.NewLogWriter(output)))
 	jm.Diagnostics().EnableEvent(EventTaskComplete)
 	jm.Diagnostics().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
