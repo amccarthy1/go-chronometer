@@ -13,21 +13,21 @@ const (
 	EventTaskComplete logger.EventFlag = "chronometer.task.complete"
 )
 
-// EventTaskListener is a listener for task complete events.
-type EventTaskListener func(w logger.Logger, ts logger.TimeSource, taskName string)
+// TaskListener is a listener for task complete events.
+type TaskListener func(w logger.Logger, ts logger.TimeSource, taskName string)
 
-// NewEventTaskListener returns a new event listener for task events.
-func NewEventTaskListener(listener EventTaskListener) logger.EventListener {
+// NewTaskListener returns a new event listener for task events.
+func NewTaskListener(listener TaskListener) logger.EventListener {
 	return func(writer logger.Logger, ts logger.TimeSource, eventFlag logger.EventFlag, state ...interface{}) {
 		listener(writer, ts, state[0].(string))
 	}
 }
 
-// EventTaskCompleteListener is a listener for task complete events.
-type EventTaskCompleteListener func(w logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error)
+// TaskCompleteListener is a listener for task complete events.
+type TaskCompleteListener func(w logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error)
 
 // NewTaskCompleteListener returns a new event listener for task events.
-func NewTaskCompleteListener(listener EventTaskCompleteListener) logger.EventListener {
+func NewTaskCompleteListener(listener TaskCompleteListener) logger.EventListener {
 	return func(writer logger.Logger, ts logger.TimeSource, eventFlag logger.EventFlag, state ...interface{}) {
 		if state[2] == nil {
 			listener(writer, ts, state[0].(string), state[1].(time.Duration), nil)
