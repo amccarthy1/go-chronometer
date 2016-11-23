@@ -190,6 +190,14 @@ func (jm *JobManager) EnableJob(jobName string) error {
 	return nil
 }
 
+func (jm *JobManager) showJobMessages(job Job) bool {
+	hasDiagnostics := jm.diagnostics != nil
+	if showMessagesProvider, isShowMessagesProvider := job.(ShowMessagesProvider); isShowMessagesProvider {
+		return hasDiagnostics && showMessagesProvider.ShowMessages()
+	}
+	return hasDiagnostics
+}
+
 // RunJob runs a job by jobName on demand.
 func (jm *JobManager) RunJob(jobName string) error {
 	jm.loadedJobsLock.RLock()
@@ -201,8 +209,19 @@ func (jm *JobManager) RunJob(jobName string) error {
 	if job, hasJob := jm.loadedJobs[jobName]; hasJob {
 		if !jm.disabledJobs.Contains(jobName) {
 			now := time.Now().UTC()
+			if jm.showJobMessages(job) {
+				jm.diagnostics.Infof("Job `%s` starting", jobName)
+			}
 			jm.setLastRunTime(jobName, now)
-			return jm.RunTask(job)
+			err := jm.RunTask(job)
+			if jm.showJobMessages(job) {
+				if err == nil {
+					jm.diagnostics.Infof("Job `%s` complete", jobName)
+				} else {
+					jm.diagnostics.Infof("Job `%s` failed", jobName)
+				}
+			}
+			return err
 		}
 		return nil
 	}
