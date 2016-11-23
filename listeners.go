@@ -7,9 +7,21 @@ import (
 )
 
 const (
+	// EventTask is a logger diagnostics event for task completions.
+	EventTask logger.EventFlag = "chronometer.task"
 	// EventTaskComplete is a logger diagnostics event for task completions.
-	EventTaskComplete logger.EventFlag = "chronometer.task"
+	EventTaskComplete logger.EventFlag = "chronometer.task.complete"
 )
+
+// EventTaskListener is a listener for task complete events.
+type EventTaskListener func(w logger.Logger, ts logger.TimeSource, taskName string)
+
+// NewEventTaskListener returns a new event listener for task events.
+func NewEventTaskListener(listener EventTaskListener) logger.EventListener {
+	return func(writer logger.Logger, ts logger.TimeSource, eventFlag logger.EventFlag, state ...interface{}) {
+		listener(writer, ts, state[0].(string))
+	}
+}
 
 // EventTaskCompleteListener is a listener for task complete events.
 type EventTaskCompleteListener func(w logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error)

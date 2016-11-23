@@ -104,7 +104,15 @@ func (jm *JobManager) SetDiagnostics(agent *logger.DiagnosticsAgent) {
 }
 
 // fireTaskListeners fires the currently configured task listeners.
-func (jm *JobManager) fireTaskListeners(taskName string, elapsed time.Duration, err error) {
+func (jm *JobManager) fireTaskListeners(taskName string) {
+	if jm.diagnostics == nil {
+		return
+	}
+	jm.diagnostics.OnEvent(EventTask, taskName)
+}
+
+// fireTaskListeners fires the currently configured task listeners.
+func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Duration, err error) {
 	if jm.diagnostics == nil {
 		return
 	}
@@ -209,18 +217,8 @@ func (jm *JobManager) RunJob(jobName string) error {
 	if job, hasJob := jm.loadedJobs[jobName]; hasJob {
 		if !jm.disabledJobs.Contains(jobName) {
 			now := time.Now().UTC()
-			if jm.showJobMessages(job) {
-				jm.diagnostics.Infof("Job `%s` starting", jobName)
-			}
 			jm.setLastRunTime(jobName, now)
 			err := jm.RunTask(job)
-			if jm.showJobMessages(job) {
-				if err == nil {
-					jm.diagnostics.Infof("Job `%s` complete", jobName)
-				} else {
-					jm.diagnostics.Infof("Job `%s` failed", jobName)
-				}
-			}
 			return err
 		}
 		return nil
@@ -248,7 +246,7 @@ func (jm *JobManager) RunAllJobs() error {
 func (jm *JobManager) RunTask(t Task) error {
 	taskName := t.Name()
 	ct := NewCancellationToken()
-	start := time.Now().UTC()
+	start := time.Now()
 
 	jm.setRunningTask(taskName, t)
 	jm.setCancellationToken(taskName, ct)
@@ -261,7 +259,7 @@ func (jm *JobManager) RunTask(t Task) error {
 		var err error
 		defer func() {
 			jm.cleanupTask(taskName)
-			jm.fireTaskListeners(taskName, time.Now().UTC().Sub(start), err)
+			jm.fireTaskCompleteListeners(taskName, time.Since(start), err)
 		}()
 
 		defer func() {
@@ -273,6 +271,7 @@ func (jm *JobManager) RunTask(t Task) error {
 		}()
 
 		jm.onTaskStart(t)
+		jm.fireTaskListeners(taskName)
 		err = t.Execute(ct)
 		jm.onTaskComplete(t, err)
 	}()
