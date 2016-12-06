@@ -91,6 +91,11 @@ func EveryHourOnTheHour() Schedule {
 	return OnTheHour{}
 }
 
+// EveryHourAt returns a schedule that fires every hour at a given minute.
+func EveryHourAt(minute int) Schedule {
+	return OnTheHourAt{minute}
+}
+
 // WeeklyAt returns a schedule that fires on every of the given days at the given time by hour, minute and second.
 func WeeklyAt(hour, minute, second int, days ...time.Weekday) Schedule {
 	dayOfWeekMask := uint(0)
@@ -241,6 +246,26 @@ func (o OnTheHour) GetNextRunTime(after *time.Time) *time.Time {
 		returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC).Add(1 * time.Hour)
 	} else {
 		returnValue = time.Date(after.Year(), after.Month(), after.Day(), after.Hour(), 0, 0, 0, time.UTC).Add(1 * time.Hour)
+	}
+	return &returnValue
+}
+
+// OnTheHourAt is a schedule that fires every hour on the given minute.
+type OnTheHourAt struct {
+	Minute int
+}
+
+// GetNextRunTime implements the chronometer Schedule api.
+func (o OnTheHourAt) GetNextRunTime(after *time.Time) *time.Time {
+	var returnValue time.Time
+	now := time.Now().UTC()
+	if after == nil {
+		returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), o.Minute, 0, 0, time.UTC)
+	} else {
+		returnValue = time.Date(after.Year(), after.Month(), after.Day(), after.Hour(), o.Minute, 0, 0, time.UTC)
+	}
+	if returnValue.Before(now) {
+		returnValue = returnValue.Add(time.Hour)
 	}
 	return &returnValue
 }
