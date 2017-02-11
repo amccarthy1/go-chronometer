@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/blendlabs/go-assert"
-	util "github.com/blendlabs/go-util"
 )
 
 func TestIntervalSchedule(t *testing.T) {
@@ -83,7 +82,7 @@ func TestOnTheHourAt(t *testing.T) {
 
 	assert.InTimeDelta(fromNilExpected, *fromNil, time.Second)
 
-	fromHalf := schedule.GetNextRunTime(util.OptionalTime(time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 30, 0, 0, time.UTC)))
+	fromHalf := schedule.GetNextRunTime(OptionalTime(time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 30, 0, 0, time.UTC)))
 	assert.NotNil(fromHalf)
 	fromHalfExpected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 15, 0, 0, time.UTC)
 	assert.InTimeDelta(fromHalfExpected, *fromHalf, time.Second)

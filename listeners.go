@@ -19,7 +19,9 @@ type TaskListener func(w logger.Logger, ts logger.TimeSource, taskName string)
 // NewTaskListener returns a new event listener for task events.
 func NewTaskListener(listener TaskListener) logger.EventListener {
 	return func(writer logger.Logger, ts logger.TimeSource, eventFlag logger.EventFlag, state ...interface{}) {
-		listener(writer, ts, state[0].(string))
+		if len(state) > 0 {
+			listener(writer, ts, state[0].(string))
+		}
 	}
 }
 
@@ -29,10 +31,12 @@ type TaskCompleteListener func(w logger.Logger, ts logger.TimeSource, taskName s
 // NewTaskCompleteListener returns a new event listener for task events.
 func NewTaskCompleteListener(listener TaskCompleteListener) logger.EventListener {
 	return func(writer logger.Logger, ts logger.TimeSource, eventFlag logger.EventFlag, state ...interface{}) {
-		if state[2] == nil {
-			listener(writer, ts, state[0].(string), state[1].(time.Duration), nil)
-		} else {
-			listener(writer, ts, state[0].(string), state[1].(time.Duration), state[2].(error))
+		if len(state) > 2 {
+			if state[2] == nil {
+				listener(writer, ts, state[0].(string), state[1].(time.Duration), nil)
+			} else {
+				listener(writer, ts, state[0].(string), state[1].(time.Duration), state[2].(error))
+			}
 		}
 	}
 }

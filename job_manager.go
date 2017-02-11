@@ -99,6 +99,9 @@ func (jm *JobManager) Diagnostics() *logger.DiagnosticsAgent {
 }
 
 func (jm *JobManager) showMessagesFor(taskName string) bool {
+	jm.loadedJobsLock.RLock()
+	defer jm.loadedJobsLock.RUnlock()
+
 	if job, hasJob := jm.loadedJobs[taskName]; hasJob {
 		if typed, isTyped := job.(ShowMessagesProvider); isTyped {
 			return typed.ShowMessages()
@@ -542,8 +545,8 @@ func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
 // --------------------------------------------------------------------------------
 
 func (jm *JobManager) getCancellationToken(jobName string) *CancellationToken {
-	jm.cancellationTokensLock.Lock()
-	defer jm.cancellationTokensLock.Unlock()
+	jm.cancellationTokensLock.RLock()
+	defer jm.cancellationTokensLock.RUnlock()
 
 	return jm.cancellationTokens[jobName]
 }
@@ -577,8 +580,8 @@ func (jm *JobManager) deleteDisabledJob(jobName string) {
 }
 
 func (jm *JobManager) getNextRunTime(jobName string) *time.Time {
-	jm.nextRunTimesLock.Lock()
-	defer jm.nextRunTimesLock.Unlock()
+	jm.nextRunTimesLock.RLock()
+	defer jm.nextRunTimesLock.RUnlock()
 
 	return jm.nextRunTimes[jobName]
 }
