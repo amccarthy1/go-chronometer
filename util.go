@@ -2,6 +2,21 @@ package chronometer
 
 import "time"
 
+// Now returns a new timestamp.
+func Now() time.Time {
+	return time.Now().UTC()
+}
+
+// Since returns the duration since another timestamp.
+func Since(t time.Time) time.Duration {
+	return Now().Sub(t)
+}
+
+// FormatTime returns a string for a time.
+func FormatTime(t time.Time) string {
+	return t.Format(time.RFC3339)
+}
+
 // OptionalUInt8 Returns a pointer to a value
 func OptionalUInt8(value uint8) *uint8 {
 	return &value

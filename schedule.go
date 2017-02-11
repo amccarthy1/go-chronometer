@@ -148,7 +148,7 @@ type ImmediateSchedule struct{}
 
 // GetNextRunTime implements Schedule.
 func (i ImmediateSchedule) GetNextRunTime(after *time.Time) *time.Time {
-	now := time.Now().UTC()
+	now := Now()
 	return &now
 }
 
@@ -162,10 +162,10 @@ type IntervalSchedule struct {
 func (i IntervalSchedule) GetNextRunTime(after *time.Time) *time.Time {
 	if after == nil {
 		if i.StartDelay == nil {
-			next := time.Now().UTC().Add(i.Every)
+			next := Now().Add(i.Every)
 			return &next
 		}
-		next := time.Now().UTC().Add(*i.StartDelay).Add(i.Every)
+		next := Now().Add(*i.StartDelay).Add(i.Every)
 		return &next
 	}
 	last := *after
@@ -188,7 +188,7 @@ func (ds DailySchedule) checkDayOfWeekMask(day time.Weekday) bool {
 // GetNextRunTime implements Schedule.
 func (ds DailySchedule) GetNextRunTime(after *time.Time) *time.Time {
 	if after == nil {
-		now := time.Now().UTC()
+		now := Now()
 		after = &now
 	}
 
@@ -211,7 +211,7 @@ type OnTheQuarterHour struct{}
 func (o OnTheQuarterHour) GetNextRunTime(after *time.Time) *time.Time {
 	var returnValue time.Time
 	if after == nil {
-		now := time.Now().UTC()
+		now := Now()
 		if now.Minute() >= 45 {
 			returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 45, 0, 0, time.UTC).Add(15 * time.Minute)
 		} else if now.Minute() >= 30 {
@@ -241,7 +241,7 @@ type OnTheHour struct{}
 // GetNextRunTime implements the chronometer Schedule api.
 func (o OnTheHour) GetNextRunTime(after *time.Time) *time.Time {
 	var returnValue time.Time
-	now := time.Now().UTC()
+	now := Now()
 	if after == nil {
 		returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC).Add(1 * time.Hour)
 		if returnValue.Before(now) {
@@ -261,7 +261,7 @@ type OnTheHourAt struct {
 // GetNextRunTime implements the chronometer Schedule api.
 func (o OnTheHourAt) GetNextRunTime(after *time.Time) *time.Time {
 	var returnValue time.Time
-	now := time.Now().UTC()
+	now := Now()
 	if after == nil {
 		returnValue = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), o.Minute, 0, 0, time.UTC)
 		if returnValue.Before(now) {

@@ -278,7 +278,7 @@ func (jm *JobManager) RunAllJobs() error {
 func (jm *JobManager) RunTask(t Task) error {
 	taskName := t.Name()
 	ct := NewCancellationToken()
-	start := time.Now()
+	start := Now()
 
 	jm.setRunningTask(taskName, t)
 	jm.setCancellationToken(taskName, ct)
@@ -291,7 +291,7 @@ func (jm *JobManager) RunTask(t Task) error {
 		var err error
 		defer func() {
 			jm.cleanupTask(taskName)
-			jm.fireTaskCompleteListeners(taskName, time.Since(start), err)
+			jm.fireTaskCompleteListeners(taskName, Since(start), err)
 		}()
 
 		defer func() {
@@ -379,7 +379,7 @@ func (jm *JobManager) runDueJobsInner() {
 	jm.nextRunTimesLock.Lock()
 	defer jm.nextRunTimesLock.Unlock()
 
-	now := time.Now().UTC()
+	now := Now()
 
 	for jobName, nextRunTime := range jm.nextRunTimes {
 		if nextRunTime != nil {
@@ -411,8 +411,7 @@ func (jm *JobManager) killHangingJobsInner() {
 	jm.cancellationTokensLock.Lock()
 	defer jm.cancellationTokensLock.Unlock()
 
-	now := time.Now().UTC()
-
+	now := Now()
 	for taskName, startedTime := range jm.runningTaskStartTimes {
 		if task, hasTask := jm.runningTasks[taskName]; hasTask {
 			if timeoutProvider, isTimeoutProvder := task.(TimeoutProvider); isTimeoutProvder {
@@ -466,7 +465,7 @@ func (jm *JobManager) Status() []TaskStatus {
 	defer jm.lastRunTimesLock.RUnlock()
 
 	var statuses []TaskStatus
-	now := time.Now().UTC()
+	now := Now()
 	for jobName, job := range jm.loadedJobs {
 		status := TaskStatus{}
 		status.Name = jobName
@@ -481,12 +480,12 @@ func (jm *JobManager) Status() []TaskStatus {
 		}
 
 		if lastRunTime, hasLastRunTime := jm.lastRunTimes[jobName]; hasLastRunTime {
-			status.LastRunTime = lastRunTime.Format(time.RFC3339)
+			status.LastRunTime = FormatTime(lastRunTime)
 		}
 
 		if nextRunTime, hasNextRunTime := jm.nextRunTimes[jobName]; hasNextRunTime {
 			if nextRunTime != nil {
-				status.NextRunTime = nextRunTime.Format(time.RFC3339)
+				status.NextRunTime = FormatTime(*nextRunTime)
 			}
 		}
 
@@ -527,7 +526,7 @@ func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
 	defer jm.runningTasksLock.RUnlock()
 
 	if task, isRunning := jm.runningTasks[taskName]; isRunning {
-		now := time.Now().UTC()
+		now := Now()
 		status := TaskStatus{
 			Name:  taskName,
 			State: StateRunning,
