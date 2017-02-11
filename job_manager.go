@@ -115,21 +115,24 @@ func (jm *JobManager) showMessagesFor(taskName string) bool {
 func (jm *JobManager) SetDiagnostics(agent *logger.DiagnosticsAgent) {
 	jm.diagnostics = agent
 
-	jm.diagnostics.AddEventListener(EventTask, NewTaskListener(func(wr logger.Logger, ts logger.TimeSource, taskName string) {
-		if jm.showMessagesFor(taskName) {
-			logger.WriteEventf(wr, ts, EventTask, logger.ColorBlue, "`%s` starting", taskName)
-		}
-	}))
+	jm.diagnostics.AddEventListener(EventTask, NewTaskListener(jm.taskListener))
+	jm.diagnostics.AddEventListener(EventTaskComplete, NewTaskCompleteListener(jm.taskCompleteListener))
+}
 
-	jm.diagnostics.AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(wr logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error) {
-		if jm.showMessagesFor(taskName) {
-			if err != nil {
-				logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorRed, "`%s` failed %v", taskName, elapsed)
-			} else {
-				logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorBlue, "`%s` completed %v", taskName, elapsed)
-			}
+func (jm *JobManager) taskListener(wr logger.Logger, ts logger.TimeSource, taskName string) {
+	if jm.showMessagesFor(taskName) {
+		logger.WriteEventf(wr, ts, EventTask, logger.ColorBlue, "`%s` starting", taskName)
+	}
+}
+
+func (jm *JobManager) taskCompleteListener(wr logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error) {
+	if jm.showMessagesFor(taskName) {
+		if err != nil {
+			logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorRed, "`%s` failed %v", taskName, elapsed)
+		} else {
+			logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorBlue, "`%s` completed %v", taskName, elapsed)
 		}
-	}))
+	}
 }
 
 // fireTaskListeners fires the currently configured task listeners.
