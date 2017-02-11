@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"strings"
+
 	"github.com/blendlabs/go-assert"
 	logger "github.com/blendlabs/go-logger"
 )
@@ -359,7 +361,11 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	wg.Add(2)
 
 	output := bytes.NewBuffer(nil)
-	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone(), logger.NewLogWriter(output)))
+	agent := logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone(), logger.NewLogWriter(output))
+	agent.Writer().SetUseAnsiColors(false)
+	agent.Writer().SetShowTimestamp(false)
+
+	jm.SetDiagnostics(agent)
 	jm.Diagnostics().EnableEvent(EventTaskComplete)
 	jm.Diagnostics().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
@@ -377,4 +383,5 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	wg.Wait()
 
 	assert.True(didRun)
+	assert.True(strings.HasPrefix(output.String(), "chronometer.task.complete `test_task`"))
 }

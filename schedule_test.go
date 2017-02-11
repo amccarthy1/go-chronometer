@@ -70,20 +70,22 @@ func TestOnTheHourAt(t *testing.T) {
 	assert := assert.New(t)
 
 	now := time.Now().UTC()
-	schedule := EveryHourAt(15)
+	schedule := EveryHourAt(40)
 
 	fromNil := schedule.GetNextRunTime(nil)
 	assert.NotNil(fromNil)
 
-	fromNilExpected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 15, 0, 0, time.UTC)
+	fromNilExpected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 40, 0, 0, time.UTC)
 	if fromNilExpected.Before(now) {
 		fromNilExpected = fromNilExpected.Add(time.Hour)
 	}
-
 	assert.InTimeDelta(fromNilExpected, *fromNil, time.Second)
 
-	fromHalf := schedule.GetNextRunTime(OptionalTime(time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 30, 0, 0, time.UTC)))
+	fromHalfStart := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 45, 0, 0, time.UTC)
+	fromHalfExpected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 40, 0, 0, time.UTC)
+
+	fromHalf := schedule.GetNextRunTime(OptionalTime(fromHalfStart))
+
 	assert.NotNil(fromHalf)
-	fromHalfExpected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 15, 0, 0, time.UTC)
 	assert.InTimeDelta(fromHalfExpected, *fromHalf, time.Second)
 }
