@@ -98,7 +98,9 @@ func (jm *JobManager) Diagnostics() *logger.DiagnosticsAgent {
 	return jm.diagnostics
 }
 
-func (jm *JobManager) showMessagesFor(taskName string) bool {
+// ShouldShowMessagesFor is a helper function to determine if we should show messages for a
+// given task name.
+func (jm *JobManager) ShouldShowMessagesFor(taskName string) bool {
 	jm.loadedJobsLock.RLock()
 	defer jm.loadedJobsLock.RUnlock()
 
@@ -120,13 +122,13 @@ func (jm *JobManager) SetDiagnostics(agent *logger.DiagnosticsAgent) {
 }
 
 func (jm *JobManager) taskListener(wr logger.Logger, ts logger.TimeSource, taskName string) {
-	if jm.showMessagesFor(taskName) {
+	if jm.ShouldShowMessagesFor(taskName) {
 		logger.WriteEventf(wr, ts, EventTask, logger.ColorBlue, "`%s` starting", taskName)
 	}
 }
 
 func (jm *JobManager) taskCompleteListener(wr logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error) {
-	if jm.showMessagesFor(taskName) {
+	if jm.ShouldShowMessagesFor(taskName) {
 		if err != nil {
 			logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorRed, "`%s` failed %v", taskName, elapsed)
 		} else {
