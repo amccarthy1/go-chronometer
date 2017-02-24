@@ -385,3 +385,16 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	assert.True(didRun)
 	assert.True(strings.HasPrefix(output.String(), "chronometer.task.complete `test_task`"))
 }
+
+// The goal with this test is to see if panics take down the test process or not.
+func TestJobManagerTaskPanicHandling(t *testing.T) {
+	manager := NewJobManager()
+	waitGroup := sync.WaitGroup{}
+	waitGroup.Add(1)
+	manager.RunTask(NewTask(func(ct *CancellationToken) error {
+		defer waitGroup.Done()
+		panic("test panic")
+	}))
+
+	waitGroup.Wait()
+}

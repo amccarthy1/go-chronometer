@@ -301,6 +301,9 @@ func (jm *JobManager) RunTask(t Task) error {
 				if _, isCancellation := r.(CancellationPanic); isCancellation {
 					jm.onTaskCancellation(t)
 				}
+				if jm.diagnostics != nil {
+					jm.diagnostics.Fatal(fmt.Errorf("%+v", r))
+				}
 			}
 		}()
 
