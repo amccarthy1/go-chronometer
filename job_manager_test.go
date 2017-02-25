@@ -332,9 +332,9 @@ func TestJobManagerTaskListener(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	output := bytes.NewBuffer(nil)
-	jm.SetDiagnostics(logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone(), logger.NewLogWriter(output)))
-	jm.Diagnostics().EnableEvent(EventTaskComplete)
-	jm.Diagnostics().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
+	jm.SetLogger(logger.New(logger.NewEventFlagSetNone(), logger.NewLogWriter(output)))
+	jm.Logger().EnableEvent(EventTaskComplete)
+	jm.Logger().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
 		assert.Equal("test_task", taskName)
 		assert.NotZero(elapsed)
@@ -361,13 +361,13 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	wg.Add(2)
 
 	output := bytes.NewBuffer(nil)
-	agent := logger.NewDiagnosticsAgent(logger.NewEventFlagSetNone(), logger.NewLogWriter(output))
+	agent := logger.New(logger.NewEventFlagSetNone(), logger.NewLogWriter(output))
 	agent.Writer().SetUseAnsiColors(false)
 	agent.Writer().SetShowTimestamp(false)
 
-	jm.SetDiagnostics(agent)
-	jm.Diagnostics().EnableEvent(EventTaskComplete)
-	jm.Diagnostics().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
+	jm.SetLogger(agent)
+	jm.Logger().EnableEvent(EventTaskComplete)
+	jm.Logger().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ logger.Logger, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
 		assert.Equal("test_task", taskName)
 		assert.NotZero(elapsed)
