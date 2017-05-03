@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/blendlabs/go-exception"
+	logger "github.com/blendlabs/go-logger"
 )
 
 // NewCancellationToken returns a new CancellationToken instance.
@@ -31,7 +32,7 @@ func HandleCancellationPanic(handler func()) {
 			logger.Default().Warningf(cancellation.Error())
 		}
 	}
-
+}
 
 // CancellationToken are the signalling mechanism chronometer uses to tell tasks that they should stop work.
 type CancellationToken struct {
