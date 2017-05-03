@@ -26,12 +26,12 @@ func NewCancellationPanic() error {
 // execution handlers that handles and forwards the CancellationPanic
 func HandleCancellationPanic(handler func()) {
 	if r := recover(); r != nil {
-		if _, isCancellation := r.(CancellationPanic); isCancellation {
+		if cancellation, isCancellation := r.(CancellationPanic); isCancellation {
 			handler()
-			panic(r)
+			logger.Default().Warningf(cancellation.Error())
 		}
 	}
-}
+
 
 // CancellationToken are the signalling mechanism chronometer uses to tell tasks that they should stop work.
 type CancellationToken struct {
