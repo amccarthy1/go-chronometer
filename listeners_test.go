@@ -12,11 +12,11 @@ import (
 func TestTaskListener(t *testing.T) {
 	assert := assert.New(t)
 
-	agent := logger.New(logger.NewEventFlagSetWithEvents(EventTask))
+	agent := logger.New(logger.NewEventFlagSet(EventTask))
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var returnedTaskName string
-	agent.AddEventListener(EventTask, NewTaskListener(func(w logger.Logger, ts logger.TimeSource, taskName string) {
+	agent.AddEventListener(EventTask, NewTaskListener(func(w *logger.Writer, ts logger.TimeSource, taskName string) {
 		defer wg.Done()
 		returnedTaskName = taskName
 	}))
@@ -31,11 +31,11 @@ func TestTaskListener(t *testing.T) {
 func TestTaskCompleteListener(t *testing.T) {
 	assert := assert.New(t)
 
-	agent := logger.New(logger.NewEventFlagSetWithEvents(EventTaskComplete))
+	agent := logger.New(logger.NewEventFlagSet(EventTaskComplete))
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var returnedTaskName string
-	agent.AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(w logger.Logger, ts logger.TimeSource, taskName string, elapsed time.Duration, err error) {
+	agent.AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(w *logger.Writer, ts logger.TimeSource, taskName string, elapsed time.Duration, err error) {
 		defer wg.Done()
 		returnedTaskName = taskName
 	}))
