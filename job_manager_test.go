@@ -388,13 +388,18 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 
 // The goal with this test is to see if panics take down the test process or not.
 func TestJobManagerTaskPanicHandling(t *testing.T) {
+	assert := assert.New(t)
 	manager := NewJobManager()
 	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(1)
-	manager.RunTask(NewTask(func(ct *CancellationToken) error {
+	err := manager.RunTask(NewTask(func(ct *CancellationToken) error {
 		defer waitGroup.Done()
-		panic("test panic")
+		array := []int{}
+		foo := array[1] //this should index out of bounds
+		assert.NotZero(foo)
+		return nil
 	}))
 
 	waitGroup.Wait()
+	assert.Nil(err)
 }
