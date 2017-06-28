@@ -1,6 +1,7 @@
 package chronometer
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -88,4 +89,15 @@ func TestOnTheHourAt(t *testing.T) {
 
 	assert.NotNil(fromHalf)
 	assert.InTimeDelta(fromHalfExpected, *fromHalf, time.Second)
+}
+
+func TestImmediatelyThen(t *testing.T) {
+	assert := assert.New(t)
+
+	s := Immediately().Then(EveryHour())
+	assert.NotNil(s.GetNextRunTime(nil))
+	now := Now()
+	next := *s.GetNextRunTime(optional(Now()))
+	assert.True(next.Sub(now) > time.Minute, fmt.Sprintf("%v", next.Sub(now)))
+	assert.True(next.Sub(now) < (2 * time.Hour))
 }

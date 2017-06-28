@@ -383,7 +383,7 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	wg.Wait()
 
 	assert.True(didRun)
-	assert.True(strings.HasPrefix(output.String(), "chronometer.task.complete `test_task`"))
+	assert.True(strings.HasPrefix(output.String(), "[chronometer.task.complete] `test_task`"), output.String())
 }
 
 // The goal with this test is to see if panics take down the test process or not.
