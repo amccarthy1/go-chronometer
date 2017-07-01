@@ -2,6 +2,7 @@ package chronometer
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -17,7 +18,7 @@ import (
 
 type testJob struct {
 	RunAt       time.Time
-	RunDelegate func(ct *CancellationToken) error
+	RunDelegate func(ctx context.Context) error
 }
 
 type testJobSchedule struct {
@@ -36,14 +37,14 @@ func (tj *testJob) Schedule() Schedule {
 	return testJobSchedule{RunAt: tj.RunAt}
 }
 
-func (tj *testJob) Execute(ct *CancellationToken) error {
-	return tj.RunDelegate(ct)
+func (tj *testJob) Execute(ctx context.Context) error {
+	return tj.RunDelegate(ctx)
 }
 
 type testJobWithTimeout struct {
 	RunAt                time.Time
 	TimeoutDuration      time.Duration
-	RunDelegate          func(ct *CancellationToken) error
+	RunDelegate          func(ctx context.Context) error
 	CancellationDelegate func()
 }
 
@@ -59,8 +60,8 @@ func (tj *testJobWithTimeout) Schedule() Schedule {
 	return testJobSchedule{RunAt: tj.RunAt}
 }
 
-func (tj *testJobWithTimeout) Execute(ct *CancellationToken) error {
-	return tj.RunDelegate(ct)
+func (tj *testJobWithTimeout) Execute(ctx context.Context) error {
+	return tj.RunDelegate(ctx)
 }
 
 func (tj *testJobWithTimeout) OnCancellation() {
@@ -69,7 +70,7 @@ func (tj *testJobWithTimeout) OnCancellation() {
 
 type testJobInterval struct {
 	RunEvery    time.Duration
-	RunDelegate func(ct *CancellationToken) error
+	RunDelegate func(ctx context.Context) error
 }
 
 func (tj *testJobInterval) Name() string {
@@ -80,8 +81,8 @@ func (tj *testJobInterval) Schedule() Schedule {
 	return Every(tj.RunEvery)
 }
 
-func (tj *testJobInterval) Execute(ct *CancellationToken) error {
-	return tj.RunDelegate(ct)
+func (tj *testJobInterval) Execute(ctx context.Context) error {
+	return tj.RunDelegate(ctx)
 }
 
 func TestRunTask(t *testing.T) {
@@ -91,7 +92,7 @@ func TestRunTask(t *testing.T) {
 
 	didRun := new(AtomicFlag)
 	var runCount int32
-	jm.RunTask(NewTask(func(ct *CancellationToken) error {
+	jm.RunTask(NewTask(func(ctx context.Context) error {
 		atomic.AddInt32(&runCount, 1)
 		didRun.Set(true)
 		return nil
@@ -104,18 +105,18 @@ func TestRunTask(t *testing.T) {
 		}
 
 		func() {
-			jm.runningTasksLock.RLock()
-			defer jm.runningTasksLock.RUnlock()
+			jm.runningTasksLock.Lock()
+			defer jm.runningTasksLock.Unlock()
 
-			jm.runningTaskStartTimesLock.RLock()
-			defer jm.runningTaskStartTimesLock.RUnlock()
+			jm.runningTaskStartTimesLock.Lock()
+			defer jm.runningTaskStartTimesLock.Unlock()
 
-			jm.cancellationTokensLock.RLock()
-			defer jm.cancellationTokensLock.RUnlock()
+			jm.cancelsLock.Lock()
+			defer jm.cancelsLock.Unlock()
 
 			a.Len(jm.runningTasks, 1)
 			a.Len(jm.runningTaskStartTimes, 1)
-			a.Len(jm.cancellationTokens, 1)
+			a.Len(jm.cancels, 1)
 		}()
 
 		elapsed = elapsed + 10*time.Millisecond
@@ -131,16 +132,20 @@ func TestRunTaskAndCancel(t *testing.T) {
 
 	didRun := new(AtomicFlag)
 	didFinish := new(AtomicFlag)
-	jm.RunTask(NewTaskWithName("taskToCancel", func(ct *CancellationToken) error {
+	jm.RunTask(NewTaskWithName("taskToCancel", func(ctx context.Context) error {
 		defer func() {
 			didFinish.Set(true)
 		}()
 		didRun.Set(true)
 		taskElapsed := time.Duration(0)
 		for taskElapsed < 1*time.Second {
-			ct.CheckCancellation()
-			taskElapsed = taskElapsed + 10*time.Millisecond
-			time.Sleep(10 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				taskElapsed = taskElapsed + 10*time.Millisecond
+				time.Sleep(10 * time.Millisecond)
+			}
 		}
 
 		return nil
@@ -176,7 +181,7 @@ func TestRunJobBySchedule(t *testing.T) {
 	didRun := new(AtomicFlag)
 	runCount := new(AtomicCounter)
 	jm := NewJobManager()
-	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
+	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		didRun.Set(true)
 		return nil
@@ -206,7 +211,7 @@ func TestDisableJob(t *testing.T) {
 	didRun := new(AtomicFlag)
 	runCount := new(AtomicCounter)
 	jm := NewJobManager()
-	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ct *CancellationToken) error {
+	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		didRun.Set(true)
 		return nil
@@ -227,14 +232,22 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	didRun := new(AtomicFlag)
 	didCancel := new(AtomicFlag)
 	cancelCount := new(AtomicCounter)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
 	jm.LoadJob(&testJobWithTimeout{
 		RunAt:           start,
 		TimeoutDuration: 100 * time.Millisecond,
-		RunDelegate: func(ct *CancellationToken) error {
+		RunDelegate: func(ctx context.Context) error {
+			defer wg.Done()
 			didRun.Set(true)
 			for !didCancel.Get() {
-				ct.CheckCancellation()
-				time.Sleep(10 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					didCancel.Set(true)
+					return nil
+				}
 			}
 
 			return nil
@@ -247,15 +260,11 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	jm.Start()
 	defer jm.Stop()
 
-	for !didCancel.Get() {
-		time.Sleep(1 * time.Millisecond)
-	}
-
+	wg.Wait()
 	elapsed := time.Now().UTC().Sub(start)
 
 	a.True(didRun.Get())
 	a.True(didCancel.Get())
-	a.Equal(1, cancelCount.Get())
 
 	// elapsed should be less than the timeout + (2 heartbeat intervals)
 	a.True(elapsed < (100+(HangingHeartbeatInterval*2))*time.Millisecond, fmt.Sprintf("%v", elapsed))
@@ -270,7 +279,7 @@ func TestRunJobSimultaneously(t *testing.T) {
 	completeCount := new(AtomicCounter)
 	jm.LoadJob(&testJob{
 		RunAt: time.Now().UTC(),
-		RunDelegate: func(ct *CancellationToken) error {
+		RunDelegate: func(ctx context.Context) error {
 			runCount.Increment()
 			time.Sleep(50 * time.Millisecond)
 			completeCount.Increment()
@@ -303,7 +312,7 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 
 	runCount := new(AtomicCounter)
 	jm := NewJobManager()
-	err := jm.LoadJob(&testJobInterval{RunEvery: runEvery, RunDelegate: func(ct *CancellationToken) error {
+	err := jm.LoadJob(&testJobInterval{RunEvery: runEvery, RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		return nil
 	}})
@@ -342,7 +351,7 @@ func TestJobManagerTaskListener(t *testing.T) {
 	}))
 
 	var didRun bool
-	jm.RunTask(NewTaskWithName("test_task", func(ct *CancellationToken) error {
+	jm.RunTask(NewTaskWithName("test_task", func(ctx context.Context) error {
 		defer wg.Done()
 		didRun = true
 		return nil
@@ -375,7 +384,7 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	}))
 
 	var didRun bool
-	jm.RunTask(NewTaskWithName("test_task", func(ct *CancellationToken) error {
+	jm.RunTask(NewTaskWithName("test_task", func(ctx context.Context) error {
 		defer wg.Done()
 		didRun = true
 		return errors.New("testError")
@@ -392,7 +401,7 @@ func TestJobManagerTaskPanicHandling(t *testing.T) {
 	manager := NewJobManager()
 	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(1)
-	err := manager.RunTask(NewTask(func(ct *CancellationToken) error {
+	err := manager.RunTask(NewTask(func(ctx context.Context) error {
 		defer waitGroup.Done()
 		array := []int{}
 		foo := array[1] //this should index out of bounds

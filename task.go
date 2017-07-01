@@ -1,6 +1,7 @@
 package chronometer
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 type CancellationSignalReciever func()
 
 // TaskAction is an function that can be run as a task
-type TaskAction func(ct *CancellationToken) error
+type TaskAction func(ctx context.Context) error
 
 // ResumeProvider is an interface that allows a task to be resumed.
 type ResumeProvider interface {
@@ -51,7 +52,7 @@ type OnCompleteReceiver interface {
 // Task is an interface that structs can satisfy to allow them to be run as tasks.
 type Task interface {
 	Name() string
-	Execute(ct *CancellationToken) error
+	Execute(ctx context.Context) error
 }
 
 // --------------------------------------------------------------------------------
@@ -66,8 +67,8 @@ type basicTask struct {
 func (bt basicTask) Name() string {
 	return bt.name
 }
-func (bt basicTask) Execute(ct *CancellationToken) error {
-	return bt.action(ct)
+func (bt basicTask) Execute(ctx context.Context) error {
+	return bt.action(ctx)
 }
 func (bt basicTask) OnStart()             {}
 func (bt basicTask) OnCancellation()      {}
@@ -91,7 +92,7 @@ func NewTaskWithName(name string, action TaskAction) Task {
 // TaskStatus is the basic format of a status of a task.
 type TaskStatus struct {
 	Name        string `json:"name"`
-	State       string `json:"state"`
+	State       State  `json:"state"`
 	Status      string `json:"status,omitempty"`
 	LastRunTime string `json:"last_run_time,omitempty"`
 	NextRunTime string `json:"next_run_time,omitempy"`
