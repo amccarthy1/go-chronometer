@@ -12,7 +12,7 @@ import (
 func TestTaskListener(t *testing.T) {
 	assert := assert.New(t)
 
-	agent := logger.New(logger.NewEventFlagSet(EventTask))
+	agent := logger.New(EventTask)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var returnedTaskName string
@@ -31,7 +31,7 @@ func TestTaskListener(t *testing.T) {
 func TestTaskCompleteListener(t *testing.T) {
 	assert := assert.New(t)
 
-	agent := logger.New(logger.NewEventFlagSet(EventTaskComplete))
+	agent := logger.New(EventTaskComplete)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var returnedTaskName string
