@@ -33,6 +33,11 @@ const (
 	StateDisabled State = "disabled"
 )
 
+// New is an alias for `NewJobManager`.
+func New() *JobManager {
+	return NewJobManager()
+}
+
 // NewJobManager returns a new instance of JobManager.
 func NewJobManager() *JobManager {
 	jm := JobManager{
