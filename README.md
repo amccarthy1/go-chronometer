@@ -37,6 +37,16 @@ Schedules are very basic right now, either the job runs on a fixed interval (eve
 
 You're free to implement your own schedules outside the basic ones; a schedule is just an interface for `GetNextRunTime(after time.Time)`.
 
-###Tasks vs. Jobs
+### Tasks vs. Jobs
 
 Jobs are tasks with schedules, thats about it. The interfaces are very similar otherwise. 
+
+### Optional Interfaces
+
+You can optionally implement interfaces to give you more control over your jobs:
+
+```golang
+Enabled() bool
+```
+
+Allows you to enable or disable your job within the job itself; this allows all the code required to manage the job be in the same place.
