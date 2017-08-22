@@ -45,6 +45,7 @@ func NewJobManager() *JobManager {
 		lastRunTimes:          map[string]time.Time{},
 		nextRunTimes:          map[string]*time.Time{},
 		disabledJobs:          collections.SetOfString{},
+		enabledProviders:      map[string]func() bool{},
 	}
 
 	return &jm
@@ -73,6 +74,9 @@ type JobManager struct {
 
 	disabledJobsLock sync.Mutex
 	disabledJobs     collections.SetOfString
+
+	enabledProvidersLock sync.Mutex
+	enabledProviders     map[string]func() bool
 
 	runningTasksLock sync.Mutex
 	runningTasks     map[string]Task
@@ -180,6 +184,12 @@ func (jm *JobManager) IsDisabled(jobName string) (value bool) {
 	jm.disabledJobsLock.Lock()
 	value = jm.disabledJobs.Contains(jobName)
 	jm.disabledJobsLock.Unlock()
+
+	jm.enabledProvidersLock.Lock()
+	if provider, hasProvider := jm.enabledProviders[jobName]; hasProvider {
+		value = value || !provider()
+	}
+	jm.enabledProvidersLock.Unlock()
 	return
 }
 
@@ -214,6 +224,7 @@ func (jm *JobManager) LoadJob(j Job) error {
 	jobSchedule := j.Schedule()
 	jm.setSchedule(jobName, jobSchedule)
 	jm.setNextRunTime(jobName, jobSchedule.GetNextRunTime(nil))
+	jm.setEnabledProvider(jobName, j)
 	return nil
 }
 
@@ -432,7 +443,6 @@ func (jm *JobManager) killHangingJobs(ctx context.Context) {
 }
 
 func (jm *JobManager) killHangingJobsInner() {
-
 	jm.runningTasksLock.Lock()
 	defer jm.runningTasksLock.Unlock()
 
@@ -640,6 +650,14 @@ func (jm *JobManager) setNextRunTime(jobName string, t *time.Time) {
 	jm.nextRunTimesLock.Lock()
 	jm.nextRunTimes[jobName] = t
 	jm.nextRunTimesLock.Unlock()
+}
+
+func (jm *JobManager) setEnabledProvider(jobName string, j Job) {
+	if typed, isTyped := j.(EnabledProvider); isTyped {
+		jm.enabledProvidersLock.Lock()
+		jm.enabledProviders[jobName] = func() bool { return typed.Enabled() }
+		jm.enabledProvidersLock.Unlock()
+	}
 }
 
 func (jm *JobManager) deleteNextRunTime(jobName string) {

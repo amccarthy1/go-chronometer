@@ -13,3 +13,8 @@ type Job interface {
 type ShowMessagesProvider interface {
 	ShowMessages() bool
 }
+
+// EnabledProvider is an optional interface that will allow jobs to control if they're enabled.
+type EnabledProvider interface {
+	Enabled() bool
+}
