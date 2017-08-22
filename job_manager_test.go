@@ -412,3 +412,47 @@ func TestJobManagerTaskPanicHandling(t *testing.T) {
 	waitGroup.Wait()
 	assert.Nil(err)
 }
+
+type testWithEnabled struct {
+	isEnabled bool
+	action    func()
+}
+
+func (twe testWithEnabled) Name() string {
+	return "testWithEnabled"
+}
+
+func (twe testWithEnabled) Schedule() Schedule {
+	return OnDemand()
+}
+
+func (twe testWithEnabled) Enabled() bool {
+	return twe.isEnabled
+}
+
+func (twe testWithEnabled) Execute(ctx context.Context) error {
+	twe.action()
+	return nil
+}
+
+func TestEnabledProvider(t *testing.T) {
+	assert := assert.New(t)
+
+	var didRun bool
+	manager := NewJobManager()
+	job := &testWithEnabled{
+		isEnabled: true,
+		action: func() {
+			didRun = true
+		},
+	}
+
+	manager.LoadJob(job)
+	assert.False(manager.IsDisabled("testWithEnabled"))
+	manager.DisableJob("testWithEnabled")
+	assert.True(manager.IsDisabled("testWithEnabled"))
+	job.isEnabled = false
+	assert.True(manager.IsDisabled("testWithEnabled"))
+	manager.EnableJob("testWithEnabled")
+	assert.True(manager.IsDisabled("testWithEnabled"))
+}
