@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/blendlabs/go-util"
+	uuid "github.com/blendlabs/go-util/uuid"
 )
 
 // --------------------------------------------------------------------------------
@@ -76,7 +76,7 @@ func (bt basicTask) OnComplete(err error) {}
 
 // NewTask returns a new task wrapper for a given TaskAction.
 func NewTask(action TaskAction) Task {
-	name := fmt.Sprintf("task_%s", util.UUIDv4().ToShortString())
+	name := fmt.Sprintf("task_%s", uuid.V4().ToShortString())
 	return &basicTask{name: name, action: action}
 }
 
