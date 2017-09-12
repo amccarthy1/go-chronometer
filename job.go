@@ -12,6 +12,16 @@ type Job interface {
 	Execute(ctx context.Context) error
 }
 
+// IsJobCancelled check if a job is cancelled
+func IsJobCancelled(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 // ShowMessagesProvider is a type that enables or disables messages.
 type ShowMessagesProvider interface {
 	ShowMessages() bool
