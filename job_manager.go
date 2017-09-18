@@ -166,7 +166,7 @@ func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Du
 	}
 	jm.logger.OnEvent(EventTaskComplete, taskName, elapsed, err)
 	if err != nil {
-		jm.logger.OnEvent(logger.EventError, err)
+		jm.logger.Error(err)
 	}
 }
 
