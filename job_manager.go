@@ -33,13 +33,8 @@ const (
 	StateDisabled State = "disabled"
 )
 
-// New is an alias for `NewJobManager`.
+// New returns a new job manager.
 func New() *JobManager {
-	return NewJobManager()
-}
-
-// NewJobManager returns a new instance of JobManager.
-func NewJobManager() *JobManager {
 	jm := JobManager{
 		loadedJobs:            map[string]Job{},
 		runningTasks:          map[string]Task{},
@@ -66,7 +61,7 @@ func Default() *JobManager {
 		defer _defaultLock.Unlock()
 
 		if _default == nil {
-			_default = NewJobManager()
+			_default = New()
 		}
 	}
 	return _default
@@ -170,6 +165,9 @@ func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Du
 		return
 	}
 	jm.logger.OnEvent(EventTaskComplete, taskName, elapsed, err)
+	if err != nil {
+		jm.logger.OnEvent(logger.EventError, err)
+	}
 }
 
 // --------------------------------------------------------------------------------
@@ -331,10 +329,6 @@ func (jm *JobManager) RunTask(t Task) error {
 		defer func() {
 			if r := recover(); r != nil {
 				err = exception.Newf("%v", r)
-
-				if jm.logger != nil {
-					jm.logger.Fatalf("%+v", r)
-				}
 			}
 		}()
 

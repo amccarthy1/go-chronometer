@@ -88,7 +88,7 @@ func (tj *testJobInterval) Execute(ctx context.Context) error {
 func TestRunTask(t *testing.T) {
 	a := assert.New(t)
 
-	jm := NewJobManager()
+	jm := New()
 
 	didRun := new(AtomicFlag)
 	var runCount int32
@@ -128,7 +128,7 @@ func TestRunTask(t *testing.T) {
 
 func TestRunTaskAndCancel(t *testing.T) {
 	a := assert.New(t)
-	jm := NewJobManager()
+	jm := New()
 
 	didRun := new(AtomicFlag)
 	didFinish := new(AtomicFlag)
@@ -180,7 +180,7 @@ func TestRunJobBySchedule(t *testing.T) {
 
 	didRun := new(AtomicFlag)
 	runCount := new(AtomicCounter)
-	jm := NewJobManager()
+	jm := New()
 	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		didRun.Set(true)
@@ -210,7 +210,7 @@ func TestDisableJob(t *testing.T) {
 
 	didRun := new(AtomicFlag)
 	runCount := new(AtomicCounter)
-	jm := NewJobManager()
+	jm := New()
 	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		didRun.Set(true)
@@ -226,7 +226,7 @@ func TestDisableJob(t *testing.T) {
 func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	a := assert.New(t)
 
-	jm := NewJobManager()
+	jm := New()
 
 	start := time.Now().UTC()
 	didRun := new(AtomicFlag)
@@ -273,7 +273,7 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 func TestRunJobSimultaneously(t *testing.T) {
 	a := assert.New(t)
 
-	jm := NewJobManager()
+	jm := New()
 
 	runCount := new(AtomicCounter)
 	completeCount := new(AtomicCounter)
@@ -311,7 +311,7 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 	runFor := 1000 * time.Millisecond
 
 	runCount := new(AtomicCounter)
-	jm := NewJobManager()
+	jm := New()
 	err := jm.LoadJob(&testJobInterval{RunEvery: runEvery, RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		return nil
@@ -336,7 +336,7 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 func TestJobManagerTaskListener(t *testing.T) {
 	assert := assert.New(t)
 
-	jm := NewJobManager()
+	jm := New()
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -364,7 +364,7 @@ func TestJobManagerTaskListener(t *testing.T) {
 func TestJobManagerTaskListenerWithError(t *testing.T) {
 	assert := assert.New(t)
 
-	jm := NewJobManager()
+	jm := New()
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -398,7 +398,7 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 // The goal with this test is to see if panics take down the test process or not.
 func TestJobManagerTaskPanicHandling(t *testing.T) {
 	assert := assert.New(t)
-	manager := NewJobManager()
+	manager := New()
 	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(1)
 	err := manager.RunTask(NewTask(func(ctx context.Context) error {
@@ -439,7 +439,7 @@ func TestEnabledProvider(t *testing.T) {
 	assert := assert.New(t)
 
 	var didRun bool
-	manager := NewJobManager()
+	manager := New()
 	job := &testWithEnabled{
 		isEnabled: true,
 		action: func() {
@@ -455,4 +455,33 @@ func TestEnabledProvider(t *testing.T) {
 	assert.True(manager.IsDisabled("testWithEnabled"))
 	manager.EnableJob("testWithEnabled")
 	assert.True(manager.IsDisabled("testWithEnabled"))
+}
+
+func TestFiresErrorOnTaskError(t *testing.T) {
+	assert := assert.New(t)
+
+	agent := logger.New(logger.EventError)
+	manager := New()
+	manager.SetLogger(agent)
+
+	var errorDidFire bool
+	var errorMatched bool
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	agent.AddEventListener(logger.EventError, logger.NewErrorListener(func(_ *logger.Writer, _ logger.TimeSource, err error) {
+		defer wg.Done()
+		errorDidFire = true
+		if err != nil {
+			errorMatched = err.Error() == "this is only a test"
+		}
+	}))
+	manager.LoadJob(NewJob().WithAction(func(ctx context.Context) error {
+		defer wg.Done()
+		return fmt.Errorf("this is only a test")
+	}).WithName("error_test"))
+	manager.RunJob("error_test")
+	wg.Wait()
+
+	assert.True(errorDidFire)
+	assert.True(errorMatched)
 }
