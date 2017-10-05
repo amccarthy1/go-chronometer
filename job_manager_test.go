@@ -16,29 +16,32 @@ import (
 	logger "github.com/blendlabs/go-logger"
 )
 
-type testJob struct {
+const (
+	runAtJobName = "runAt"
+)
+
+type runAtJob struct {
 	RunAt       time.Time
 	RunDelegate func(ctx context.Context) error
 }
 
-type testJobSchedule struct {
-	RunAt time.Time
+type runAt time.Time
+
+func (ra runAt) GetNextRunTime(after *time.Time) *time.Time {
+	typed := time.Time(ra)
+	return &typed
 }
 
-func (tjs testJobSchedule) GetNextRunTime(after *time.Time) *time.Time {
-	return &tjs.RunAt
+func (raj *runAtJob) Name() string {
+	return "runAt"
 }
 
-func (tj *testJob) Name() string {
-	return "testJob"
+func (raj *runAtJob) Schedule() Schedule {
+	return runAt(raj.RunAt)
 }
 
-func (tj *testJob) Schedule() Schedule {
-	return testJobSchedule{RunAt: tj.RunAt}
-}
-
-func (tj *testJob) Execute(ctx context.Context) error {
-	return tj.RunDelegate(ctx)
+func (raj *runAtJob) Execute(ctx context.Context) error {
+	return raj.RunDelegate(ctx)
 }
 
 type testJobWithTimeout struct {
@@ -57,7 +60,7 @@ func (tj *testJobWithTimeout) Timeout() time.Duration {
 }
 
 func (tj *testJobWithTimeout) Schedule() Schedule {
-	return testJobSchedule{RunAt: tj.RunAt}
+	return Immediately()
 }
 
 func (tj *testJobWithTimeout) Execute(ctx context.Context) error {
@@ -87,8 +90,10 @@ func (tj *testJobInterval) Execute(ctx context.Context) error {
 
 func TestRunTask(t *testing.T) {
 	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
-	jm := New()
+	jm := New().WithHighPrecisionHeartbeat()
 
 	didRun := new(AtomicFlag)
 	var runCount int32
@@ -128,6 +133,9 @@ func TestRunTask(t *testing.T) {
 
 func TestRunTaskAndCancel(t *testing.T) {
 	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
+
 	jm := New()
 
 	didRun := new(AtomicFlag)
@@ -177,54 +185,54 @@ func TestRunTaskAndCancel(t *testing.T) {
 
 func TestRunJobBySchedule(t *testing.T) {
 	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
-	didRun := new(AtomicFlag)
-	runCount := new(AtomicCounter)
+	didRun := make(chan bool)
 	jm := New()
-	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ctx context.Context) error {
-		runCount.Increment()
-		didRun.Set(true)
-		return nil
-	}})
+	runAt := Now().Add(jm.HeartbeatInterval())
+	err := jm.LoadJob(&runAtJob{
+		RunAt: runAt,
+		RunDelegate: func(ctx context.Context) error {
+			didRun <- true
+			return nil
+		},
+	})
 	a.Nil(err)
 
 	jm.Start()
 	defer jm.Stop()
 
-	elapsed := time.Duration(0)
-	for elapsed < 2*time.Second {
-		if didRun.Get() {
-			break
-		}
+	before := Now()
+	<-didRun
 
-		elapsed = elapsed + 10*time.Millisecond
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	a.True(didRun.Get())
-	a.Equal(1, runCount.Get())
+	a.True(Since(before) < 2*jm.HeartbeatInterval())
 }
 
 func TestDisableJob(t *testing.T) {
 	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
 	didRun := new(AtomicFlag)
 	runCount := new(AtomicCounter)
 	jm := New()
-	err := jm.LoadJob(&testJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ctx context.Context) error {
+	err := jm.LoadJob(&runAtJob{RunAt: time.Now().UTC().Add(100 * time.Millisecond), RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		didRun.Set(true)
 		return nil
 	}})
 	a.Nil(err)
 
-	err = jm.DisableJob("testJob")
+	err = jm.DisableJob(runAtJobName)
 	a.Nil(err)
-	a.True(jm.disabledJobs.Contains("testJob"))
+	a.True(jm.disabledJobs.Contains(runAtJobName))
 }
 
 func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
 	jm := New()
 
@@ -247,6 +255,9 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 				case <-ctx.Done():
 					didCancel.Set(true)
 					return nil
+				default:
+					time.Sleep(10 * time.Millisecond)
+					continue
 				}
 			}
 
@@ -267,51 +278,50 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	a.True(didCancel.Get())
 
 	// elapsed should be less than the timeout + (2 heartbeat intervals)
-	a.True(elapsed < (100+(HangingHeartbeatInterval*2))*time.Millisecond, fmt.Sprintf("%v", elapsed))
+	a.True(elapsed < (100+(DefaultHeartbeatInterval*2))*time.Millisecond, fmt.Sprintf("%v", elapsed))
 }
 
 func TestRunJobSimultaneously(t *testing.T) {
 	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
-	jm := New()
+	jm := New().WithHighPrecisionHeartbeat()
 
-	runCount := new(AtomicCounter)
-	completeCount := new(AtomicCounter)
-	jm.LoadJob(&testJob{
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	jm.LoadJob(&runAtJob{
 		RunAt: time.Now().UTC(),
 		RunDelegate: func(ctx context.Context) error {
-			runCount.Increment()
+			defer wg.Done()
 			time.Sleep(50 * time.Millisecond)
-			completeCount.Increment()
 			return nil
 		},
 	})
 
 	go func() {
-		err := jm.RunJob("testJob")
+		err := jm.RunJob(runAtJobName)
 		a.Nil(err)
 	}()
 	go func() {
-		err := jm.RunJob("testJob")
+		err := jm.RunJob(runAtJobName)
 		a.Nil(err)
 	}()
 
-	for completeCount.Get() != 2 {
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	a.Equal(2, runCount.Get())
-	a.Equal(2, completeCount.Get())
+	wg.Wait()
 }
 
 func TestRunJobByScheduleRapid(t *testing.T) {
 	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
 	runEvery := 50 * time.Millisecond
 	runFor := 1000 * time.Millisecond
 
 	runCount := new(AtomicCounter)
-	jm := New()
+	jm := New().WithHighPrecisionHeartbeat()
 	err := jm.LoadJob(&testJobInterval{RunEvery: runEvery, RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
 		return nil
@@ -328,8 +338,7 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 		time.Sleep(waitFor)
 	}
 
-	expected := int64(runFor) / int64(HeartbeatInterval)
-
+	expected := int64(runFor) / int64(DefaultHeartbeatInterval)
 	a.True(int64(runCount.Get()) >= expected, fmt.Sprintf("%d vs. %d\n", runCount, expected))
 }
 
@@ -397,7 +406,10 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 
 // The goal with this test is to see if panics take down the test process or not.
 func TestJobManagerTaskPanicHandling(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
+
 	manager := New()
 	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(1)
@@ -405,12 +417,12 @@ func TestJobManagerTaskPanicHandling(t *testing.T) {
 		defer waitGroup.Done()
 		array := []int{}
 		foo := array[1] //this should index out of bounds
-		assert.NotZero(foo)
+		a.NotZero(foo)
 		return nil
 	}))
 
 	waitGroup.Wait()
-	assert.Nil(err)
+	a.Nil(err)
 }
 
 type testWithEnabled struct {
@@ -436,7 +448,9 @@ func (twe testWithEnabled) Execute(ctx context.Context) error {
 }
 
 func TestEnabledProvider(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
 	var didRun bool
 	manager := New()
@@ -448,17 +462,19 @@ func TestEnabledProvider(t *testing.T) {
 	}
 
 	manager.LoadJob(job)
-	assert.False(manager.IsDisabled("testWithEnabled"))
+	a.False(manager.IsDisabled("testWithEnabled"))
 	manager.DisableJob("testWithEnabled")
-	assert.True(manager.IsDisabled("testWithEnabled"))
+	a.True(manager.IsDisabled("testWithEnabled"))
 	job.isEnabled = false
-	assert.True(manager.IsDisabled("testWithEnabled"))
+	a.True(manager.IsDisabled("testWithEnabled"))
 	manager.EnableJob("testWithEnabled")
-	assert.True(manager.IsDisabled("testWithEnabled"))
+	a.True(manager.IsDisabled("testWithEnabled"))
 }
 
 func TestFiresErrorOnTaskError(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
+	a.StartTimeout(2000 * time.Millisecond)
+	defer a.EndTimeout()
 
 	agent := logger.New(logger.EventError)
 	manager := New()
@@ -482,6 +498,6 @@ func TestFiresErrorOnTaskError(t *testing.T) {
 	manager.RunJob("error_test")
 	wg.Wait()
 
-	assert.True(errorDidFire)
-	assert.True(errorMatched)
+	a.True(errorDidFire)
+	a.True(errorMatched)
 }

@@ -17,11 +17,11 @@ import (
 type State string
 
 const (
-	// HeartbeatInterval is the interval between schedule next run checks.
-	HeartbeatInterval = 250 * time.Millisecond
+	// DefaultHeartbeatInterval is the interval between schedule next run checks.
+	DefaultHeartbeatInterval = 50 * time.Millisecond
 
-	// HangingHeartbeatInterval is the interval between schedule next run checks.
-	HangingHeartbeatInterval = 333 * time.Millisecond
+	// HighPrecisionHeartbeatInterval is the high precision interval between schedule next run checks.
+	HighPrecisionHeartbeatInterval = 5 * time.Millisecond
 
 	//StateRunning is the running state.
 	StateRunning State = "running"
@@ -36,6 +36,7 @@ const (
 // New returns a new job manager.
 func New() *JobManager {
 	jm := JobManager{
+		heartbeatInterval:     DefaultHeartbeatInterval,
 		loadedJobs:            map[string]Job{},
 		runningTasks:          map[string]Task{},
 		schedules:             map[string]Schedule{},
@@ -69,6 +70,8 @@ func Default() *JobManager {
 
 // JobManager is the main orchestration and job management object.
 type JobManager struct {
+	heartbeatInterval time.Duration
+
 	loadedJobsLock sync.Mutex
 	loadedJobs     map[string]Job
 
@@ -118,6 +121,28 @@ func (jm *JobManager) SetLogger(agent *logger.Agent) {
 		jm.logger.AddEventListener(EventTask, NewTaskListener(jm.taskListener))
 		jm.logger.AddEventListener(EventTaskComplete, NewTaskCompleteListener(jm.taskCompleteListener))
 	}
+}
+
+// HeartbeatInterval returns the current heartbeat interval.
+func (jm *JobManager) HeartbeatInterval() time.Duration {
+	return jm.heartbeatInterval
+}
+
+// WithHighPrecisionHeartbeat sets the heartbeat interval to the high precision interval and returns a reference.
+func (jm *JobManager) WithHighPrecisionHeartbeat() *JobManager {
+	jm.heartbeatInterval = HighPrecisionHeartbeatInterval
+	return jm
+}
+
+// WithDefaultPrecisionHeartbeat sets the heartbeat interval to the high precision interval and returns a reference.
+func (jm *JobManager) WithDefaultPrecisionHeartbeat() *JobManager {
+	jm.heartbeatInterval = DefaultHeartbeatInterval
+	return jm
+}
+
+// SetHeartbeatInterval sets the heartbeat interval explicitly.
+func (jm *JobManager) SetHeartbeatInterval(interval time.Duration) {
+	jm.heartbeatInterval = interval
 }
 
 // ShouldShowMessagesFor is a helper function to determine if we should show messages for a
@@ -180,6 +205,14 @@ func (jm *JobManager) HasJob(jobName string) bool {
 	_, hasJob := jm.loadedJobs[jobName]
 	jm.loadedJobsLock.Unlock()
 	return hasJob
+}
+
+// Job returns a job instance by name.
+func (jm *JobManager) Job(jobName string) (job Job) {
+	jm.loadedJobsLock.Lock()
+	job = jm.loadedJobs[jobName]
+	jm.loadedJobsLock.Unlock()
+	return
 }
 
 // IsDisabled returns if a job is disabled.
@@ -399,49 +432,60 @@ func (jm *JobManager) Stop() {
 	jm.isRunning = false
 }
 
+// --------------------------------------------------------------------------------
+// Utility Methods
+// --------------------------------------------------------------------------------
+
 func (jm *JobManager) runDueJobs(ctx context.Context) {
+	heartbeat := time.Tick(jm.heartbeatInterval)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		default:
+		case <-heartbeat:
 			jm.runDueJobsInner()
-			time.Sleep(HeartbeatInterval)
 		}
 	}
 }
 
 func (jm *JobManager) runDueJobsInner() {
+	// we hold this lock because we're rangning over the collection.
 	jm.nextRunTimesLock.Lock()
-	defer jm.nextRunTimesLock.Unlock()
 
 	now := Now()
-
+	var err error
 	for jobName, nextRunTime := range jm.nextRunTimes {
 		if nextRunTime != nil {
 			if !jm.IsDisabled(jobName) {
 				if nextRunTime.Before(now) {
+					job := jm.getLoadedJob(jobName)
 					jm.nextRunTimes[jobName] = jm.getSchedule(jobName).GetNextRunTime(&now)
-					jm.RunJob(jobName)
+					jm.setLastRunTime(jobName, now)
+					err = jm.RunTask(job)
+					if err != nil {
+						jm.logger.Error(err)
+					}
 				}
 			}
 		}
 	}
+
+	jm.nextRunTimesLock.Unlock()
 }
 
 func (jm *JobManager) killHangingJobs(ctx context.Context) {
+	heartbeat := time.Tick(jm.heartbeatInterval)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		default:
+		case <-heartbeat:
 			jm.killHangingJobsInner()
-			time.Sleep(HangingHeartbeatInterval)
 		}
 	}
 }
 
-func (jm *JobManager) killHangingJobsInner() {
+func (jm *JobManager) killHangingJobsInner() error {
 	jm.runningTasksLock.Lock()
 	defer jm.runningTasksLock.Unlock()
 
@@ -451,17 +495,46 @@ func (jm *JobManager) killHangingJobsInner() {
 	jm.cancelsLock.Lock()
 	defer jm.cancelsLock.Unlock()
 
-	now := Now()
+	var err error
 	for taskName, startedTime := range jm.runningTaskStartTimes {
-		if task, hasTask := jm.runningTasks[taskName]; hasTask {
-			if timeoutProvider, isTimeoutProvder := task.(TimeoutProvider); isTimeoutProvder {
-				timeout := timeoutProvider.Timeout()
-				if now.Sub(startedTime) >= timeout {
-					jm.killHangingJob(taskName)
+		task, hasTask := jm.runningTasks[taskName]
+		if !hasTask {
+			continue
+		}
+
+		timeoutProvider, isTimeoutProvder := task.(TimeoutProvider)
+		if !isTimeoutProvder {
+			continue
+		}
+
+		timeout := timeoutProvider.Timeout()
+		if nextRunTime := jm.getNextRunTime(taskName); nextRunTime != nil {
+			// we need to calculate the effective timeout
+			// either startedTime+timeout or the next runtime, whichever is closer.
+
+			// t1 represents the absolute timeout time.
+			t1 := startedTime.Add(timeout)
+			// t2 represents the next runtime, or an effective time we need to stop by.
+			t2 := *nextRunTime
+
+			// the effective timeout is whichever is more soon.
+			effectiveTimeout := Min(t1, t2)
+
+			// if the effective timeout is in the past, or it's within the next heartbeat.
+			if Now().Before(effectiveTimeout) || Now().Sub(effectiveTimeout) < jm.heartbeatInterval {
+				err = jm.killHangingJob(taskName)
+				if err != nil {
+					jm.logger.Error(err)
 				}
+			}
+		} else if Now().Sub(startedTime) >= timeout {
+			err = jm.killHangingJob(taskName)
+			if err != nil {
+				jm.logger.Error(err)
 			}
 		}
 	}
+	return nil
 }
 
 // killHangingJob cancels (sends the cancellation signal) to a running task that has exceeded its timeout.
@@ -471,18 +544,29 @@ func (jm *JobManager) killHangingJobsInner() {
 // - contextsLock
 // otherwise, chaos, mayhem, deadlocks. You should *rarely* need to call this explicitly.
 func (jm *JobManager) killHangingJob(taskName string) error {
-	if _, hasTask := jm.runningTasks[taskName]; hasTask {
-		if cancel, hasCancel := jm.cancels[taskName]; hasCancel {
-			cancel()
-
-			delete(jm.runningTasks, taskName)
-			delete(jm.runningTaskStartTimes, taskName)
-			delete(jm.contexts, taskName)
-			delete(jm.cancels, taskName)
-		}
+	_, hasTask := jm.runningTasks[taskName]
+	if !hasTask {
+		return exception.Newf("task not found").WithMessagef("Task: %s", taskName)
 	}
-	return exception.Newf("Task name `%s` not found.", taskName)
+
+	cancel, hasCancel := jm.cancels[taskName]
+	if !hasCancel {
+		return exception.Newf("task has no cancellation handle").WithMessagef("Task: %s", taskName)
+	}
+
+	cancel()
+
+	delete(jm.runningTasks, taskName)
+	delete(jm.runningTaskStartTimes, taskName)
+	delete(jm.contexts, taskName)
+	delete(jm.cancels, taskName)
+
+	return nil
 }
+
+// --------------------------------------------------------------------------------
+// Status Methods
+// --------------------------------------------------------------------------------
 
 // Status returns the status metadata for a JobManager
 func (jm *JobManager) Status() []TaskStatus {
@@ -584,7 +668,7 @@ func (jm *JobManager) TaskStatus(taskName string) *TaskStatus {
 }
 
 // --------------------------------------------------------------------------------
-// Atomic Methods
+// Atomic Access/Mutating Methods
 // --------------------------------------------------------------------------------
 
 func (jm *JobManager) getContext(taskName string) (ctx context.Context) {
