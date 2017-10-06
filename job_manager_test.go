@@ -231,12 +231,10 @@ func TestDisableJob(t *testing.T) {
 
 func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	a := assert.New(t)
-	a.StartTimeout(2000 * time.Millisecond)
-	defer a.EndTimeout()
 
 	jm := New()
 
-	start := time.Now().UTC()
+	start := Now()
 	didRun := new(AtomicFlag)
 	didCancel := new(AtomicFlag)
 	cancelCount := new(AtomicCounter)
@@ -246,7 +244,7 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 
 	jm.LoadJob(&testJobWithTimeout{
 		RunAt:           start,
-		TimeoutDuration: 100 * time.Millisecond,
+		TimeoutDuration: 250 * time.Millisecond,
 		RunDelegate: func(ctx context.Context) error {
 			defer wg.Done()
 			didRun.Set(true)
@@ -314,13 +312,13 @@ func TestRunJobSimultaneously(t *testing.T) {
 
 func TestRunJobByScheduleRapid(t *testing.T) {
 	a := assert.New(t)
-	a.StartTimeout(2000 * time.Millisecond)
-	defer a.EndTimeout()
 
-	runEvery := 50 * time.Millisecond
+	runEvery := DefaultHeartbeatInterval
 	runFor := 1000 * time.Millisecond
 
 	runCount := new(AtomicCounter)
+
+	// high precision heartbeat is somewhere around 5ms
 	jm := New().WithHighPrecisionHeartbeat()
 	err := jm.LoadJob(&testJobInterval{RunEvery: runEvery, RunDelegate: func(ctx context.Context) error {
 		runCount.Increment()
@@ -338,8 +336,8 @@ func TestRunJobByScheduleRapid(t *testing.T) {
 		time.Sleep(waitFor)
 	}
 
-	expected := int64(runFor) / int64(DefaultHeartbeatInterval)
-	a.True(int64(runCount.Get()) >= expected, fmt.Sprintf("%d vs. %d\n", runCount, expected))
+	expected := int(int64(runFor) / int64(DefaultHeartbeatInterval))
+	a.True(runCount.Get()-expected < 2, fmt.Sprintf("%d vs. %d\n", runCount.Get(), expected))
 }
 
 func TestJobManagerTaskListener(t *testing.T) {
