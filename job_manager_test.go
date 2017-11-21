@@ -347,15 +347,16 @@ func TestJobManagerTaskListener(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	output := bytes.NewBuffer(nil)
-	jm.SetLogger(logger.None(logger.NewWriter(output)))
-	jm.Logger().EnableEvent(EventTaskComplete)
-	jm.Logger().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ *logger.Writer, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
+	jm.SetLogger(logger.None())
+	jm.Logger().Enable(FlagComplete)
+	jm.Logger().Listen(FlagComplete, "foo", func(wr logger.Writer, e logger.Event) {
 		defer wg.Done()
-		assert.Equal("test_task", taskName)
-		assert.NotZero(elapsed)
-		assert.Nil(err)
-	}))
+		if typed, isTyped := e.(EventComplete); isTyped {
+			assert.Equal("test_task", typed.TaskName())
+			assert.NotZero(typed.Elapsed())
+			assert.Nil(typed.Err())
+		}
+	})
 
 	var didRun bool
 	jm.RunTask(NewTaskWithName("test_task", func(ctx context.Context) error {
@@ -377,18 +378,18 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	wg.Add(2)
 
 	output := bytes.NewBuffer(nil)
-	agent := logger.None(logger.NewWriter(output))
-	agent.Writer().SetUseAnsiColors(false)
-	agent.Writer().SetShowTimestamp(false)
+	agent := logger.None().WithWriter(logger.NewTextWriter(output).WithUseColor(false).WithShowTimestamp(false))
 
 	jm.SetLogger(agent)
-	jm.Logger().EnableEvent(EventTaskComplete)
-	jm.Logger().AddEventListener(EventTaskComplete, NewTaskCompleteListener(func(_ *logger.Writer, _ logger.TimeSource, taskName string, elapsed time.Duration, err error) {
+	jm.Logger().Enable(FlagComplete)
+	jm.Logger().Listen(FlagComplete, "foo", func(wr logger.Writer, e logger.Event) {
 		defer wg.Done()
-		assert.Equal("test_task", taskName)
-		assert.NotZero(elapsed)
-		assert.NotNil(err)
-	}))
+		if typed, isTyped := e.(EventComplete); isTyped {
+			assert.Equal("test_task", typed.TaskName())
+			assert.NotZero(typed.Elapsed())
+			assert.NotNil(typed.Err())
+		}
+	})
 
 	var didRun bool
 	jm.RunTask(NewTaskWithName("test_task", func(ctx context.Context) error {
@@ -474,7 +475,7 @@ func TestFiresErrorOnTaskError(t *testing.T) {
 	a.StartTimeout(2000 * time.Millisecond)
 	defer a.EndTimeout()
 
-	agent := logger.New(logger.EventError)
+	agent := logger.New(logger.Error)
 	manager := New()
 	manager.SetLogger(agent)
 
@@ -482,13 +483,15 @@ func TestFiresErrorOnTaskError(t *testing.T) {
 	var errorMatched bool
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	agent.AddEventListener(logger.EventError, logger.NewErrorListener(func(_ *logger.Writer, _ logger.TimeSource, err error) {
+	agent.Listen(logger.Error, "foo", func(wr logger.Writer, e logger.Event) {
 		defer wg.Done()
 		errorDidFire = true
-		if err != nil {
-			errorMatched = err.Error() == "this is only a test"
+		if typed, isTyped := e.(logger.ErrorEvent); isTyped {
+			if typed.Err() != nil {
+				errorMatched = typed.Err().Error() == "this is only a test"
+			}
 		}
-	}))
+	})
 	manager.LoadJob(NewJob().WithAction(func(ctx context.Context) error {
 		defer wg.Done()
 		return fmt.Errorf("this is only a test")

@@ -105,21 +105,21 @@ type JobManager struct {
 	schedulerCancel context.CancelFunc
 	isRunning       bool
 
-	logger *logger.Agent
+	log *logger.Logger
 }
 
 // Logger returns the diagnostics agent.
-func (jm *JobManager) Logger() *logger.Agent {
-	return jm.logger
+func (jm *JobManager) Logger() *logger.Logger {
+	return jm.log
 }
 
 // SetLogger sets the diagnostics agent.
-func (jm *JobManager) SetLogger(agent *logger.Agent) {
-	jm.logger = agent
+func (jm *JobManager) SetLogger(log *logger.Logger) {
+	jm.log = log
 
-	if jm.logger != nil {
-		jm.logger.AddEventListener(EventTask, NewTaskListener(jm.taskListener))
-		jm.logger.AddEventListener(EventTaskComplete, NewTaskCompleteListener(jm.taskCompleteListener))
+	if jm.log != nil {
+		jm.log.Listen(FlagStarted, logger.DefaultListenerName, jm.taskListener)
+		jm.log.Listen(FlagComplete, logger.DefaultListenerName, jm.taskCompleteListener)
 	}
 }
 
@@ -160,38 +160,46 @@ func (jm *JobManager) ShouldShowMessagesFor(taskName string) bool {
 	return true
 }
 
-func (jm *JobManager) taskListener(wr *logger.Writer, ts logger.TimeSource, taskName string) {
-	if jm.ShouldShowMessagesFor(taskName) {
-		logger.WriteEventf(wr, ts, EventTask, logger.ColorBlue, "`%s` starting", taskName)
+func (jm *JobManager) taskListener(wr logger.Writer, e logger.Event) {
+	if typed, isTyped := e.(EventStarted); isTyped {
+		if jm.ShouldShowMessagesFor(typed.TaskName()) {
+			wr.Write(e)
+		}
 	}
 }
 
-func (jm *JobManager) taskCompleteListener(wr *logger.Writer, ts logger.TimeSource, taskName string, elapsed time.Duration, err error) {
-	if jm.ShouldShowMessagesFor(taskName) {
-		if err != nil {
-			logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorRed, "`%s` failed %v", taskName, elapsed)
-		} else {
-			logger.WriteEventf(wr, ts, EventTaskComplete, logger.ColorBlue, "`%s` completed %v", taskName, elapsed)
+func (jm *JobManager) taskCompleteListener(wr logger.Writer, e logger.Event) {
+	if typed, isTyped := e.(EventStarted); isTyped {
+		if jm.ShouldShowMessagesFor(typed.TaskName()) {
+			wr.Write(e)
 		}
 	}
 }
 
 // fireTaskListeners fires the currently configured task listeners.
 func (jm *JobManager) fireTaskListeners(taskName string) {
-	if jm.logger == nil {
+	if jm.log == nil {
 		return
 	}
-	jm.logger.OnEvent(EventTask, taskName)
+	jm.log.Trigger(EventStarted{
+		ts:       time.Now().UTC(),
+		taskName: taskName,
+	})
 }
 
 // fireTaskListeners fires the currently configured task listeners.
 func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Duration, err error) {
-	if jm.logger == nil {
+	if jm.log == nil {
 		return
 	}
-	jm.logger.OnEvent(EventTaskComplete, taskName, elapsed, err)
+	jm.log.Trigger(EventComplete{
+		ts:       time.Now().UTC(),
+		taskName: taskName,
+		elapsed:  elapsed,
+		err:      err,
+	})
 	if err != nil {
-		jm.logger.Error(err)
+		jm.log.Error(err)
 	}
 }
 
@@ -290,11 +298,11 @@ func (jm *JobManager) EnableJob(jobName string) error {
 }
 
 func (jm *JobManager) showJobMessages(job Job) bool {
-	hasDiagnostics := jm.logger != nil
+	hasLogger := jm.log != nil
 	if showMessagesProvider, isShowMessagesProvider := job.(ShowMessagesProvider); isShowMessagesProvider {
-		return hasDiagnostics && showMessagesProvider.ShowMessages()
+		return hasLogger && showMessagesProvider.ShowMessages()
 	}
-	return hasDiagnostics
+	return hasLogger
 }
 
 // RunJob runs a job by jobName on demand.
@@ -463,7 +471,7 @@ func (jm *JobManager) runDueJobsInner() {
 					jm.setLastRunTime(jobName, now)
 					err = jm.RunTask(job)
 					if err != nil {
-						jm.logger.Error(err)
+						jm.log.Error(err)
 					}
 				}
 			}
@@ -524,13 +532,13 @@ func (jm *JobManager) killHangingJobsInner() error {
 			if Now().Before(effectiveTimeout) || Now().Sub(effectiveTimeout) < jm.heartbeatInterval {
 				err = jm.killHangingJob(taskName)
 				if err != nil {
-					jm.logger.Error(err)
+					jm.log.Error(err)
 				}
 			}
 		} else if Now().Sub(startedTime) >= timeout {
 			err = jm.killHangingJob(taskName)
 			if err != nil {
-				jm.logger.Error(err)
+				jm.log.Error(err)
 			}
 		}
 	}
