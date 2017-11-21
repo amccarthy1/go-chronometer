@@ -117,9 +117,9 @@ func (jm *JobManager) Logger() *logger.Logger {
 func (jm *JobManager) SetLogger(log *logger.Logger) {
 	jm.log = log
 
-	if jm.log != nil {
-		jm.log.Listen(FlagStarted, logger.DefaultListenerName, jm.taskListener)
-		jm.log.Listen(FlagComplete, logger.DefaultListenerName, jm.taskCompleteListener)
+	if log != nil {
+		log.Listen(FlagStarted, logger.DefaultListenerName, jm.taskListener)
+		log.Listen(FlagComplete, logger.DefaultListenerName, jm.taskCompleteListener)
 	}
 }
 
@@ -457,12 +457,10 @@ func (jm *JobManager) runDueJobs(ctx context.Context) {
 }
 
 func (jm *JobManager) runDueJobsInner() {
-	// we hold this lock because we're rangning over the collection.
-	jm.nextRunTimesLock.Lock()
-
 	now := Now()
 	var err error
-	for jobName, nextRunTime := range jm.nextRunTimes {
+	for jobName := range jm.loadedJobs {
+		nextRunTime := jm.getNextRunTime(jobName)
 		if nextRunTime != nil {
 			if !jm.IsDisabled(jobName) {
 				if nextRunTime.Before(now) {
@@ -477,8 +475,6 @@ func (jm *JobManager) runDueJobsInner() {
 			}
 		}
 	}
-
-	jm.nextRunTimesLock.Unlock()
 }
 
 func (jm *JobManager) killHangingJobs(ctx context.Context) {
@@ -503,6 +499,9 @@ func (jm *JobManager) killHangingJobsInner() error {
 	jm.cancelsLock.Lock()
 	defer jm.cancelsLock.Unlock()
 
+	jm.nextRunTimesLock.Lock()
+	defer jm.nextRunTimesLock.Unlock()
+
 	var err error
 	for taskName, startedTime := range jm.runningTaskStartTimes {
 		task, hasTask := jm.runningTasks[taskName]
@@ -514,9 +513,8 @@ func (jm *JobManager) killHangingJobsInner() error {
 		if !isTimeoutProvder {
 			continue
 		}
-
 		timeout := timeoutProvider.Timeout()
-		if nextRunTime := jm.getNextRunTime(taskName); nextRunTime != nil {
+		if nextRunTime, hasNextRuntime := jm.nextRunTimes[taskName]; hasNextRuntime {
 			// we need to calculate the effective timeout
 			// either startedTime+timeout or the next runtime, whichever is closer.
 
@@ -591,8 +589,12 @@ func (jm *JobManager) Status() []TaskStatus {
 	jm.runningTasksLock.Lock()
 	defer jm.runningTasksLock.Unlock()
 
+	println("status acq nextRunTimes")
 	jm.nextRunTimesLock.Lock()
-	defer jm.nextRunTimesLock.Unlock()
+	defer func() {
+		println("status rel nextRunTimes")
+		jm.nextRunTimesLock.Unlock()
+	}()
 
 	jm.lastRunTimesLock.Lock()
 	defer jm.lastRunTimesLock.Unlock()

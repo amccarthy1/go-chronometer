@@ -3,7 +3,6 @@ package chronometer
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -248,7 +247,7 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 		RunDelegate: func(ctx context.Context) error {
 			defer wg.Done()
 			didRun.Set(true)
-			for !didCancel.Get() {
+			for {
 				select {
 				case <-ctx.Done():
 					didCancel.Set(true)
@@ -258,8 +257,6 @@ func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 					continue
 				}
 			}
-
-			return nil
 		},
 		CancellationDelegate: func() {
 			cancelCount.Increment()
@@ -349,6 +346,8 @@ func TestJobManagerTaskListener(t *testing.T) {
 	wg.Add(2)
 	jm.SetLogger(logger.None())
 	jm.Logger().Enable(FlagComplete)
+
+	var didTriggerEvent bool
 	jm.Logger().Listen(FlagComplete, "foo", func(wr logger.Writer, e logger.Event) {
 		defer wg.Done()
 		if typed, isTyped := e.(EventComplete); isTyped {
@@ -356,6 +355,7 @@ func TestJobManagerTaskListener(t *testing.T) {
 			assert.NotZero(typed.Elapsed())
 			assert.Nil(typed.Err())
 		}
+		didTriggerEvent = true
 	})
 
 	var didRun bool
@@ -367,6 +367,7 @@ func TestJobManagerTaskListener(t *testing.T) {
 	wg.Wait()
 
 	assert.True(didRun)
+	assert.True(didTriggerEvent)
 }
 
 func TestJobManagerTaskListenerWithError(t *testing.T) {
@@ -378,28 +379,34 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	wg.Add(2)
 
 	output := bytes.NewBuffer(nil)
-	agent := logger.None().WithWriter(logger.NewTextWriter(output).WithUseColor(false).WithShowTimestamp(false))
+	agent := logger.Bare(FlagComplete, logger.Error).WithWriter(
+		logger.NewTextWriter(output).
+			WithUseColor(false).
+			WithShowTimestamp(false))
 
 	jm.SetLogger(agent)
-	jm.Logger().Enable(FlagComplete)
+	var didFireListener bool
 	jm.Logger().Listen(FlagComplete, "foo", func(wr logger.Writer, e logger.Event) {
 		defer wg.Done()
+		wr.Write(e)
 		if typed, isTyped := e.(EventComplete); isTyped {
 			assert.Equal("test_task", typed.TaskName())
 			assert.NotZero(typed.Elapsed())
 			assert.NotNil(typed.Err())
 		}
+		didFireListener = true
 	})
 
 	var didRun bool
 	jm.RunTask(NewTaskWithName("test_task", func(ctx context.Context) error {
 		defer wg.Done()
 		didRun = true
-		return errors.New("testError")
+		return fmt.Errorf("testError")
 	}))
 	wg.Wait()
 
 	assert.True(didRun)
+	assert.True(didFireListener)
 	assert.True(strings.HasPrefix(output.String(), "[chronometer.task.complete] `test_task`"), output.String())
 }
 

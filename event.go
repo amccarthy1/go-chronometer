@@ -62,7 +62,7 @@ type EventComplete struct {
 
 // Flag returns the event flag.
 func (e EventComplete) Flag() logger.Flag {
-	return FlagStarted
+	return FlagComplete
 }
 
 // Timestamp returns an event timestamp.
