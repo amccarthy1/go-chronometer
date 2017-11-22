@@ -169,7 +169,7 @@ func (jm *JobManager) taskListener(wr logger.Writer, e logger.Event) {
 }
 
 func (jm *JobManager) taskCompleteListener(wr logger.Writer, e logger.Event) {
-	if typed, isTyped := e.(EventStarted); isTyped {
+	if typed, isTyped := e.(EventComplete); isTyped {
 		if jm.ShouldShowMessagesFor(typed.TaskName()) {
 			wr.Write(e)
 		}

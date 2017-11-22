@@ -55,9 +55,9 @@ func (e EventStarted) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) erro
 // MarshalJSON marshals the event as json.
 func (e EventStarted) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
-		"flag":     e.Flag(),
-		"ts":       e.ts,
-		"taskName": e.taskName,
+		logger.JSONFieldFlag:      e.Flag(),
+		logger.JSONFieldTimestamp: e.Timestamp(),
+		"taskName":                e.taskName,
 	})
 }
 
@@ -106,9 +106,9 @@ func (e EventComplete) Err() error {
 // WriteText writes the event to a text output.
 func (e EventComplete) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) error {
 	if e.err != nil {
-		buf.WriteString(fmt.Sprintf("`%s` failed %v", e.taskName, e.elapsed))
+		buf.WriteString(fmt.Sprintf("`%s` failed (%v)", e.taskName, e.elapsed))
 	} else {
-		buf.WriteString(fmt.Sprintf("`%s` completed %v", e.taskName, e.elapsed))
+		buf.WriteString(fmt.Sprintf("`%s` completed (%v)", e.taskName, e.elapsed))
 	}
 	return nil
 }
@@ -116,10 +116,10 @@ func (e EventComplete) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) err
 // MarshalJSON marshals the event as json.
 func (e EventComplete) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
-		"flag":     e.Flag(),
-		"ts":       e.ts,
-		"taskName": e.taskName,
-		"elapsed":  logger.Milliseconds(e.elapsed),
-		"err":      e.err,
+		logger.JSONFieldFlag:      e.Flag(),
+		logger.JSONFieldTimestamp: e.Timestamp(),
+		"taskName":                e.taskName,
+		logger.JSONFieldElapsed:   logger.Milliseconds(e.elapsed),
+		logger.JSONFieldErr:       e.err,
 	})
 }
