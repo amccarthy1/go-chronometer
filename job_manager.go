@@ -161,17 +161,21 @@ func (jm *JobManager) ShouldShowMessagesFor(taskName string) bool {
 }
 
 func (jm *JobManager) taskListener(wr logger.Writer, e logger.Event) {
-	if typed, isTyped := e.(EventStarted); isTyped {
-		if jm.ShouldShowMessagesFor(typed.TaskName()) {
-			wr.Write(e)
+	if wr != nil {
+		if typed, isTyped := e.(EventStarted); isTyped {
+			if jm.ShouldShowMessagesFor(typed.TaskName()) {
+				wr.Write(e)
+			}
 		}
 	}
 }
 
 func (jm *JobManager) taskCompleteListener(wr logger.Writer, e logger.Event) {
-	if typed, isTyped := e.(EventComplete); isTyped {
-		if jm.ShouldShowMessagesFor(typed.TaskName()) {
-			wr.Write(e)
+	if wr != nil {
+		if typed, isTyped := e.(EventComplete); isTyped {
+			if jm.ShouldShowMessagesFor(typed.TaskName()) {
+				wr.Write(e)
+			}
 		}
 	}
 }
