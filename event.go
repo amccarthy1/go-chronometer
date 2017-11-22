@@ -16,6 +16,15 @@ const (
 	FlagComplete logger.Flag = "chronometer.task.complete"
 )
 
+// NewEventStartedListener returns a new event started listener.
+func NewEventStartedListener(listener func(wr logger.Writer, e EventStarted)) logger.Listener {
+	return func(wr logger.Writer, e logger.Event) {
+		if typed, isTyped := e.(EventStarted); isTyped {
+			listener(wr, typed)
+		}
+	}
+}
+
 // EventStarted is a started event.
 type EventStarted struct {
 	ts       time.Time
@@ -50,6 +59,15 @@ func (e EventStarted) MarshalJSON() ([]byte, error) {
 		"ts":       e.ts,
 		"taskName": e.taskName,
 	})
+}
+
+// NewEventCompleteListener returns a new event complete listener.
+func NewEventCompleteListener(listener func(wr logger.Writer, e EventComplete)) logger.Listener {
+	return func(wr logger.Writer, e logger.Event) {
+		if typed, isTyped := e.(EventComplete); isTyped {
+			listener(wr, typed)
+		}
+	}
 }
 
 // EventComplete is an event emitted to the logger.
