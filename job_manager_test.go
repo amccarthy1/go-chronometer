@@ -344,11 +344,14 @@ func TestJobManagerTaskListener(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	jm.SetLogger(logger.None())
+	agent := logger.None()
+	defer agent.Close()
+
+	jm.SetLogger(agent)
 	jm.Logger().Enable(FlagComplete)
 
 	var didTriggerEvent bool
-	jm.Logger().Listen(FlagComplete, "foo", func(wr logger.Writer, e logger.Event) {
+	jm.Logger().Listen(FlagComplete, "foo", func(e logger.Event) {
 		defer wg.Done()
 		if typed, isTyped := e.(EventComplete); isTyped {
 			assert.Equal("test_task", typed.TaskName())
@@ -379,16 +382,17 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 	wg.Add(2)
 
 	output := bytes.NewBuffer(nil)
-	agent := logger.Bare(FlagComplete, logger.Error).WithWriter(
+	agent := logger.New(FlagComplete, logger.Error).WithWriter(
 		logger.NewTextWriter(output).
 			WithUseColor(false).
 			WithShowTimestamp(false))
 
+	defer agent.Close()
+
 	jm.SetLogger(agent)
 	var didFireListener bool
-	jm.Logger().Listen(FlagComplete, "foo", func(wr logger.Writer, e logger.Event) {
+	jm.Logger().Listen(FlagComplete, "foo", func(e logger.Event) {
 		defer wg.Done()
-		wr.Write(e)
 		if typed, isTyped := e.(EventComplete); isTyped {
 			assert.Equal("test_task", typed.TaskName())
 			assert.NotZero(typed.Elapsed())
@@ -404,10 +408,11 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 		return fmt.Errorf("testError")
 	}))
 	wg.Wait()
+	agent.Drain()
 
 	assert.True(didRun)
 	assert.True(didFireListener)
-	assert.True(strings.HasPrefix(output.String(), "[chronometer.task.complete] `test_task`"), output.String())
+	assert.True(strings.Contains(output.String(), "[chronometer.task.complete] `test_task`"), output.String())
 }
 
 // The goal with this test is to see if panics take down the test process or not.
@@ -483,6 +488,7 @@ func TestFiresErrorOnTaskError(t *testing.T) {
 	defer a.EndTimeout()
 
 	agent := logger.New(logger.Error)
+	defer agent.Close()
 	manager := New()
 	manager.SetLogger(agent)
 
@@ -490,7 +496,7 @@ func TestFiresErrorOnTaskError(t *testing.T) {
 	var errorMatched bool
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	agent.Listen(logger.Error, "foo", func(wr logger.Writer, e logger.Event) {
+	agent.Listen(logger.Error, "foo", func(e logger.Event) {
 		defer wg.Done()
 		errorDidFire = true
 		if typed, isTyped := e.(logger.ErrorEvent); isTyped {

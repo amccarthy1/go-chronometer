@@ -2,7 +2,6 @@ package chronometer
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -17,10 +16,10 @@ const (
 )
 
 // NewEventStartedListener returns a new event started listener.
-func NewEventStartedListener(listener func(wr logger.Writer, e EventStarted)) logger.Listener {
-	return func(wr logger.Writer, e logger.Event) {
+func NewEventStartedListener(listener func(e EventStarted)) logger.Listener {
+	return func(e logger.Event) {
 		if typed, isTyped := e.(EventStarted); isTyped {
-			listener(wr, typed)
+			listener(typed)
 		}
 	}
 }
@@ -46,26 +45,23 @@ func (e EventStarted) TaskName() string {
 	return e.taskName
 }
 
-// WriteText writes the event to a text output.
-func (e EventStarted) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) error {
+// WriteText implements logger.TextWritable.
+func (e EventStarted) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) {
 	buf.WriteString(fmt.Sprintf("`%s` starting", e.taskName))
-	return nil
 }
 
-// MarshalJSON marshals the event as json.
-func (e EventStarted) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		logger.JSONFieldFlag:      e.Flag(),
-		logger.JSONFieldTimestamp: e.Timestamp(),
-		"taskName":                e.taskName,
-	})
+// WriteJSON implements logger.JSONWritable.
+func (e EventStarted) WriteJSON() logger.JSONObj {
+	return logger.JSONObj{
+		"taskName": e.taskName,
+	}
 }
 
 // NewEventCompleteListener returns a new event complete listener.
-func NewEventCompleteListener(listener func(wr logger.Writer, e EventComplete)) logger.Listener {
-	return func(wr logger.Writer, e logger.Event) {
+func NewEventCompleteListener(listener func(e EventComplete)) logger.Listener {
+	return func(e logger.Event) {
 		if typed, isTyped := e.(EventComplete); isTyped {
-			listener(wr, typed)
+			listener(typed)
 		}
 	}
 }
@@ -103,23 +99,20 @@ func (e EventComplete) Err() error {
 	return e.err
 }
 
-// WriteText writes the event to a text output.
-func (e EventComplete) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) error {
+// WriteText implements logger.TextWritable.
+func (e EventComplete) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) {
 	if e.err != nil {
 		buf.WriteString(fmt.Sprintf("`%s` failed (%v)", e.taskName, e.elapsed))
 	} else {
 		buf.WriteString(fmt.Sprintf("`%s` completed (%v)", e.taskName, e.elapsed))
 	}
-	return nil
 }
 
-// MarshalJSON marshals the event as json.
-func (e EventComplete) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		logger.JSONFieldFlag:      e.Flag(),
-		logger.JSONFieldTimestamp: e.Timestamp(),
-		"taskName":                e.taskName,
-		logger.JSONFieldElapsed:   logger.Milliseconds(e.elapsed),
-		logger.JSONFieldErr:       e.err,
-	})
+// WriteJSON implements logger.JSONWritable.
+func (e EventComplete) WriteJSON() logger.JSONObj {
+	return logger.JSONObj{
+		"taskName":              e.taskName,
+		logger.JSONFieldElapsed: logger.Milliseconds(e.elapsed),
+		logger.JSONFieldErr:     e.err,
+	}
 }

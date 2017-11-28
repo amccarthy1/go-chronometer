@@ -116,11 +116,6 @@ func (jm *JobManager) Logger() *logger.Logger {
 // SetLogger sets the diagnostics agent.
 func (jm *JobManager) SetLogger(log *logger.Logger) {
 	jm.log = log
-
-	if log != nil {
-		log.Listen(FlagStarted, logger.DefaultListenerName, jm.taskListener)
-		log.Listen(FlagComplete, logger.DefaultListenerName, jm.taskCompleteListener)
-	}
 }
 
 // HeartbeatInterval returns the current heartbeat interval.
@@ -160,35 +155,17 @@ func (jm *JobManager) ShouldShowMessagesFor(taskName string) bool {
 	return true
 }
 
-func (jm *JobManager) taskListener(wr logger.Writer, e logger.Event) {
-	if wr != nil {
-		if typed, isTyped := e.(EventStarted); isTyped {
-			if jm.ShouldShowMessagesFor(typed.TaskName()) {
-				wr.Write(e)
-			}
-		}
-	}
-}
-
-func (jm *JobManager) taskCompleteListener(wr logger.Writer, e logger.Event) {
-	if wr != nil {
-		if typed, isTyped := e.(EventComplete); isTyped {
-			if jm.ShouldShowMessagesFor(typed.TaskName()) {
-				wr.Write(e)
-			}
-		}
-	}
-}
-
 // fireTaskListeners fires the currently configured task listeners.
 func (jm *JobManager) fireTaskListeners(taskName string) {
 	if jm.log == nil {
 		return
 	}
-	jm.log.Trigger(EventStarted{
-		ts:       time.Now().UTC(),
-		taskName: taskName,
-	})
+	if jm.ShouldShowMessagesFor(taskName) {
+		jm.log.Trigger(EventStarted{
+			ts:       time.Now().UTC(),
+			taskName: taskName,
+		})
+	}
 }
 
 // fireTaskListeners fires the currently configured task listeners.
@@ -196,12 +173,14 @@ func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Du
 	if jm.log == nil {
 		return
 	}
-	jm.log.Trigger(EventComplete{
-		ts:       time.Now().UTC(),
-		taskName: taskName,
-		elapsed:  elapsed,
-		err:      err,
-	})
+	if jm.ShouldShowMessagesFor(taskName) {
+		jm.log.Trigger(EventComplete{
+			ts:       time.Now().UTC(),
+			taskName: taskName,
+			elapsed:  elapsed,
+			err:      err,
+		})
+	}
 	if err != nil {
 		jm.log.Error(err)
 	}
