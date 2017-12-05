@@ -497,6 +497,7 @@ func (jm *JobManager) killHangingJobsInner() error {
 			continue
 		}
 		timeout := timeoutProvider.Timeout()
+		currentTime := Now()
 		if nextRunTime, hasNextRuntime := jm.nextRunTimes[taskName]; hasNextRuntime {
 			// we need to calculate the effective timeout
 			// either startedTime+timeout or the next runtime, whichever is closer.
@@ -510,13 +511,13 @@ func (jm *JobManager) killHangingJobsInner() error {
 			effectiveTimeout := Min(t1, t2)
 
 			// if the effective timeout is in the past, or it's within the next heartbeat.
-			if Now().Before(effectiveTimeout) || Now().Sub(effectiveTimeout) < jm.heartbeatInterval {
+			if currentTime.After(effectiveTimeout) || effectiveTimeout.Sub(currentTime) < jm.heartbeatInterval {
 				err = jm.killHangingJob(taskName)
 				if err != nil {
 					jm.log.Error(err)
 				}
 			}
-		} else if Now().Sub(startedTime) >= timeout {
+		} else if currentTime.Sub(startedTime) >= timeout {
 			err = jm.killHangingJob(taskName)
 			if err != nil {
 				jm.log.Error(err)
