@@ -383,7 +383,7 @@ func TestJobManagerTaskListenerWithError(t *testing.T) {
 
 	output := bytes.NewBuffer(nil)
 	agent := logger.New(FlagComplete, logger.Error).WithWriter(
-		logger.NewTextWriter(output).
+		logger.NewTextWriterForOutput(output).
 			WithUseColor(false).
 			WithShowTimestamp(false))
 

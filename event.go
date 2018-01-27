@@ -26,8 +26,10 @@ func NewEventStartedListener(listener func(e EventStarted)) logger.Listener {
 
 // EventStarted is a started event.
 type EventStarted struct {
-	ts       time.Time
-	taskName string
+	ts         time.Time
+	isEnabled  bool
+	isWritable bool
+	taskName   string
 }
 
 // Flag returns the event flag.
@@ -68,10 +70,12 @@ func NewEventCompleteListener(listener func(e EventComplete)) logger.Listener {
 
 // EventComplete is an event emitted to the logger.
 type EventComplete struct {
-	ts       time.Time
-	taskName string
-	err      error
-	elapsed  time.Duration
+	ts         time.Time
+	isEnabled  bool
+	isWritable bool
+	taskName   string
+	err        error
+	elapsed    time.Duration
 }
 
 // Flag returns the event flag.
