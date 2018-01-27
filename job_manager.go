@@ -140,15 +140,29 @@ func (jm *JobManager) SetHeartbeatInterval(interval time.Duration) {
 	jm.heartbeatInterval = interval
 }
 
-// ShouldShowMessagesFor is a helper function to determine if we should show messages for a
-// given task name.
-func (jm *JobManager) ShouldShowMessagesFor(taskName string) bool {
+// ShouldTriggerListeners is a helper function to determine if we should trigger listeners
+// for a given task.
+func (jm *JobManager) ShouldTriggerListeners(taskName string) bool {
 	jm.loadedJobsLock.Lock()
 	defer jm.loadedJobsLock.Unlock()
 
 	if job, hasJob := jm.loadedJobs[taskName]; hasJob {
-		if typed, isTyped := job.(ShowMessagesProvider); isTyped {
-			return typed.ShowMessages()
+		if typed, isTyped := job.(EventTriggerListenersProvider); isTyped {
+			return typed.ShouldTriggerListeners()
+		}
+	}
+
+	return true
+}
+
+// ShouldWriteOutput is a helper function to determine if we should write logging output for a task.
+func (jm *JobManager) ShouldWriteOutput(taskName string) bool {
+	jm.loadedJobsLock.Lock()
+	defer jm.loadedJobsLock.Unlock()
+
+	if job, hasJob := jm.loadedJobs[taskName]; hasJob {
+		if typed, isTyped := job.(EventShouldWriteOutputProvider); isTyped {
+			return typed.ShouldWriteOutput()
 		}
 	}
 
@@ -160,12 +174,12 @@ func (jm *JobManager) fireTaskListeners(taskName string) {
 	if jm.log == nil {
 		return
 	}
-	if jm.ShouldShowMessagesFor(taskName) {
-		jm.log.Trigger(EventStarted{
-			ts:       time.Now().UTC(),
-			taskName: taskName,
-		})
-	}
+	jm.log.Trigger(EventStarted{
+		ts:         time.Now().UTC(),
+		isEnabled:  jm.ShouldTriggerListeners(taskName),
+		isWritable: jm.ShouldWriteOutput(taskName),
+		taskName:   taskName,
+	})
 }
 
 // fireTaskListeners fires the currently configured task listeners.
@@ -173,14 +187,14 @@ func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Du
 	if jm.log == nil {
 		return
 	}
-	if jm.ShouldShowMessagesFor(taskName) {
-		jm.log.Trigger(EventComplete{
-			ts:       time.Now().UTC(),
-			taskName: taskName,
-			elapsed:  elapsed,
-			err:      err,
-		})
-	}
+	jm.log.Trigger(EventComplete{
+		ts:         time.Now().UTC(),
+		taskName:   taskName,
+		isEnabled:  jm.ShouldTriggerListeners(taskName),
+		isWritable: jm.ShouldWriteOutput(taskName),
+		elapsed:    elapsed,
+		err:        err,
+	})
 	if err != nil {
 		jm.log.Error(err)
 	}
@@ -278,14 +292,6 @@ func (jm *JobManager) EnableJob(jobName string) error {
 	jm.setNextRunTime(jobName, jobSchedule.GetNextRunTime(nil))
 
 	return nil
-}
-
-func (jm *JobManager) showJobMessages(job Job) bool {
-	hasLogger := jm.log != nil
-	if showMessagesProvider, isShowMessagesProvider := job.(ShowMessagesProvider); isShowMessagesProvider {
-		return hasLogger && showMessagesProvider.ShowMessages()
-	}
-	return hasLogger
 }
 
 // RunJob runs a job by jobName on demand.

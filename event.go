@@ -42,6 +42,16 @@ func (e EventStarted) Timestamp() time.Time {
 	return e.ts
 }
 
+// IsEnabled determines if the event triggers listeners.
+func (e EventStarted) IsEnabled() bool {
+	return e.isEnabled
+}
+
+// IsWritable determines if the event is written to the logger output.
+func (e EventStarted) IsWritable() bool {
+	return e.isWritable
+}
+
 // TaskName returns the event task name.
 func (e EventStarted) TaskName() string {
 	return e.taskName
@@ -86,6 +96,16 @@ func (e EventComplete) Flag() logger.Flag {
 // Timestamp returns an event timestamp.
 func (e EventComplete) Timestamp() time.Time {
 	return e.ts
+}
+
+// IsEnabled determines if the event triggers listeners.
+func (e EventComplete) IsEnabled() bool {
+	return e.isEnabled
+}
+
+// IsWritable determines if the event is written to the logger output.
+func (e EventComplete) IsWritable() bool {
+	return e.isWritable
 }
 
 // TaskName returns the event task name.
