@@ -74,13 +74,20 @@ func (bt basicTask) OnStart()             {}
 func (bt basicTask) OnCancellation()      {}
 func (bt basicTask) OnComplete(err error) {}
 
+// generateTaskName returns a unique identifier that can be used to name/tag
+// tasks
+func generateTaskName() string {
+	return fmt.Sprintf("task_%s", uuid.V4().ToShortString())
+}
+
 // NewTask returns a new task wrapper for a given TaskAction.
 func NewTask(action TaskAction) Task {
-	name := fmt.Sprintf("task_%s", uuid.V4().ToShortString())
+	name := generateTaskName()
 	return &basicTask{name: name, action: action}
 }
 
-// NewTaskWithName returns a new task wrapper with a given name for a given TaskAction.
+// NewTaskWithName returns a new task wrapper with a given name for a given
+// TaskAction.
 func NewTaskWithName(name string, action TaskAction) Task {
 	return &basicTask{name: name, action: action}
 }

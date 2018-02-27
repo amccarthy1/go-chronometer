@@ -2,7 +2,7 @@ package chronometer
 
 import "time"
 
-// NOTE: time.Zero()? what's that?
+// NOTE: time.Zero() is
 var (
 	// DaysOfWeek are all the time.Weekday in an array for utility purposes.
 	DaysOfWeek = []time.Weekday{
@@ -30,7 +30,7 @@ var (
 		time.Saturday,
 	}
 
-	//Epoch is unix epoc saved for utility purposes.
+	// Epoch is unix epoch saved for utility purposes.
 	Epoch = time.Unix(0, 0)
 )
 

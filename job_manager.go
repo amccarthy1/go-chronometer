@@ -47,6 +47,7 @@ func New() *JobManager {
 		nextRunTimes:          map[string]*time.Time{},
 		disabledJobs:          collections.SetOfString{},
 		enabledProviders:      map[string]func() bool{},
+		disabledParallelJobs:  collections.SetOfString{},
 	}
 
 	return &jm
@@ -74,6 +75,9 @@ type JobManager struct {
 
 	loadedJobsLock sync.Mutex
 	loadedJobs     map[string]Job
+
+	disabledParallelJobsLock sync.Mutex
+	disabledParallelJobs     collections.SetOfString
 
 	disabledJobsLock sync.Mutex
 	disabledJobs     collections.SetOfString
@@ -123,13 +127,15 @@ func (jm *JobManager) HeartbeatInterval() time.Duration {
 	return jm.heartbeatInterval
 }
 
-// WithHighPrecisionHeartbeat sets the heartbeat interval to the high precision interval and returns a reference.
+// WithHighPrecisionHeartbeat sets the heartbeat interval to the high precision
+// interval and returns a reference.
 func (jm *JobManager) WithHighPrecisionHeartbeat() *JobManager {
 	jm.heartbeatInterval = HighPrecisionHeartbeatInterval
 	return jm
 }
 
-// WithDefaultPrecisionHeartbeat sets the heartbeat interval to the high precision interval and returns a reference.
+// WithDefaultPrecisionHeartbeat sets the heartbeat interval to the high
+// precision interval and returns a reference.
 func (jm *JobManager) WithDefaultPrecisionHeartbeat() *JobManager {
 	jm.heartbeatInterval = DefaultHeartbeatInterval
 	return jm
@@ -140,8 +146,26 @@ func (jm *JobManager) SetHeartbeatInterval(interval time.Duration) {
 	jm.heartbeatInterval = interval
 }
 
-// ShouldTriggerListeners is a helper function to determine if we should trigger listeners
-// for a given task.
+// SetDisableParallel sets a given set of tasknames to not be allowed
+// to run in parallel. If `disable` is true, then the jobs will be set
+// to disallow parallel execution. If `disable` is false, then the jobs
+// will be removed from the set of jobs that are disallowed from running
+// concurrently
+func (jm *JobManager) SetDisableParallel(disable bool, jobNames ...string) {
+	jm.disabledParallelJobsLock.Lock()
+	defer jm.disabledParallelJobsLock.Unlock()
+
+	for _, jobName := range jobNames {
+		if disable {
+			jm.disabledParallelJobs.Add(jobName)
+		} else {
+			jm.disabledParallelJobs.Remove(jobName)
+		}
+	}
+}
+
+// ShouldTriggerListeners is a helper function to determine if we should
+// trigger listeners for a given task.
 func (jm *JobManager) ShouldTriggerListeners(taskName string) bool {
 	jm.loadedJobsLock.Lock()
 	defer jm.loadedJobsLock.Unlock()
@@ -155,7 +179,8 @@ func (jm *JobManager) ShouldTriggerListeners(taskName string) bool {
 	return true
 }
 
-// ShouldWriteOutput is a helper function to determine if we should write logging output for a task.
+// ShouldWriteOutput is a helper function to determine if we should write
+// logging output for a task.
 func (jm *JobManager) ShouldWriteOutput(taskName string) bool {
 	jm.loadedJobsLock.Lock()
 	defer jm.loadedJobsLock.Unlock()
@@ -165,8 +190,15 @@ func (jm *JobManager) ShouldWriteOutput(taskName string) bool {
 			return typed.ShouldWriteOutput()
 		}
 	}
-
 	return true
+}
+
+// shouldRunParallel returns whether a job should be allowed to run
+// multiple times concurrently
+func (jm *JobManager) shouldRunParallel(jobName string) bool {
+	jm.disabledParallelJobsLock.Lock()
+	defer jm.disabledParallelJobsLock.Unlock()
+	return !jm.disabledParallelJobs.Contains(jobName)
 }
 
 // fireTaskListeners fires the currently configured task listeners.
@@ -183,7 +215,8 @@ func (jm *JobManager) fireTaskListeners(taskName string) {
 }
 
 // fireTaskListeners fires the currently configured task listeners.
-func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Duration, err error) {
+func (jm *JobManager) fireTaskCompleteListeners(taskName string,
+	elapsed time.Duration, err error) {
 	if jm.log == nil {
 		return
 	}
@@ -200,23 +233,31 @@ func (jm *JobManager) fireTaskCompleteListeners(taskName string, elapsed time.Du
 	}
 }
 
-// --------------------------------------------------------------------------------
+// shouldRunJob returns whether it is legal to run a job based off of a
+// job's attributes and status. Use this function to set logic for whether
+// a job should run
+func (jm *JobManager) shouldRunJob(jobName string) bool {
+	return !jm.IsDisabled(jobName) && (!jm.IsRunning(jobName) ||
+		(jm.IsRunning(jobName) && jm.shouldRunParallel(jobName)))
+}
+
+// ----------------------------------------------------------------------------
 // Informational Methods
-// --------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // HasJob returns if a jobName is loaded or not.
 func (jm *JobManager) HasJob(jobName string) bool {
 	jm.loadedJobsLock.Lock()
+	defer jm.loadedJobsLock.Unlock()
 	_, hasJob := jm.loadedJobs[jobName]
-	jm.loadedJobsLock.Unlock()
 	return hasJob
 }
 
 // Job returns a job instance by name.
 func (jm *JobManager) Job(jobName string) (job Job) {
 	jm.loadedJobsLock.Lock()
+	defer jm.loadedJobsLock.Unlock()
 	job = jm.loadedJobs[jobName]
-	jm.loadedJobsLock.Unlock()
 	return
 }
 
@@ -237,21 +278,22 @@ func (jm *JobManager) IsDisabled(jobName string) (value bool) {
 // IsRunning returns if a task is currently running.
 func (jm *JobManager) IsRunning(taskName string) bool {
 	jm.runningTasksLock.Lock()
+	defer jm.runningTasksLock.Unlock()
 	_, isRunning := jm.runningTasks[taskName]
-	jm.runningTasksLock.Unlock()
 	return isRunning
 }
 
-// ReadAllJobs allows the consumer to do something with the full job list, using a read lock.
+// ReadAllJobs allows the consumer to do something with the full job list,
+// using a read lock.
 func (jm *JobManager) ReadAllJobs(action func(jobs map[string]Job)) {
 	jm.loadedJobsLock.Lock()
 	defer jm.loadedJobsLock.Unlock()
 	action(jm.loadedJobs)
 }
 
-// --------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // Core Methods
-// --------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // LoadJob adds a job to the manager.
 func (jm *JobManager) LoadJob(j Job) error {
@@ -303,7 +345,7 @@ func (jm *JobManager) RunJob(jobName string) error {
 	defer jm.disabledJobsLock.Unlock()
 
 	if job, hasJob := jm.loadedJobs[jobName]; hasJob {
-		if !jm.disabledJobs.Contains(jobName) {
+		if jm.shouldRunJob(jobName) {
 			now := time.Now().UTC()
 			jm.setLastRunTime(jobName, now)
 			err := jm.RunTask(job)
@@ -451,7 +493,7 @@ func (jm *JobManager) runDueJobsInner() {
 	for jobName := range jm.loadedJobs {
 		nextRunTime := jm.getNextRunTime(jobName)
 		if nextRunTime != nil {
-			if !jm.IsDisabled(jobName) {
+			if jm.shouldRunJob(jobName) {
 				if nextRunTime.Before(now) {
 					job := jm.getLoadedJob(jobName)
 					jm.nextRunTimes[jobName] = jm.getSchedule(jobName).GetNextRunTime(&now)

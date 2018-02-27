@@ -22,17 +22,20 @@ func IsJobCancelled(ctx context.Context) bool {
 	}
 }
 
-// EventTriggerListenersProvider is a type that enables or disables logger listeners.
+// EventTriggerListenersProvider is a type that enables or disables logger
+// listeners.
 type EventTriggerListenersProvider interface {
 	ShouldTriggerListeners() bool
 }
 
-// EventShouldWriteOutputProvider is a type that enables or disables logger output for events.
+// EventShouldWriteOutputProvider is a type that enables or disables logger
+// output for events.
 type EventShouldWriteOutputProvider interface {
 	ShouldWriteOutput() bool
 }
 
-// EnabledProvider is an optional interface that will allow jobs to control if they're enabled.
+// EnabledProvider is an optional interface that will allow jobs to control if
+// they're enabled.
 type EnabledProvider interface {
 	Enabled() bool
 }
