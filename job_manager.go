@@ -341,9 +341,6 @@ func (jm *JobManager) RunJob(jobName string) error {
 	jm.loadedJobsLock.Lock()
 	defer jm.loadedJobsLock.Unlock()
 
-	jm.disabledJobsLock.Lock()
-	defer jm.disabledJobsLock.Unlock()
-
 	if job, hasJob := jm.loadedJobs[jobName]; hasJob {
 		if jm.shouldRunJob(jobName) {
 			now := time.Now().UTC()
