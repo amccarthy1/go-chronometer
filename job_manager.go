@@ -454,7 +454,7 @@ func (jm *JobManager) runDueJobsInner() {
 			if !jm.IsDisabled(jobName) {
 				if nextRunTime.Before(now) {
 					job := jm.getLoadedJob(jobName)
-					jm.nextRunTimes[jobName] = jm.getSchedule(jobName).GetNextRunTime(&now)
+					jm.setNextRunTime(jobName, jm.getSchedule(jobName).GetNextRunTime(&now))
 					jm.setLastRunTime(jobName, now)
 					err = jm.RunTask(job)
 					if err != nil {
