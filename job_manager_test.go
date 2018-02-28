@@ -228,6 +228,36 @@ func TestDisableJob(t *testing.T) {
 	a.True(jm.disabledJobs.Contains(runAtJobName))
 }
 
+func TestDisableParallelJob(t *testing.T) {
+	assert := assert.New(t)
+	assert.StartTimeout(2 * time.Second)
+	defer assert.EndTimeout()
+
+	runCount := new(AtomicCounter)
+
+	jm := New()
+	job := &runAtJob{
+		RunAt: time.Now().UTC(),
+		RunDelegate: func(ctx context.Context) error {
+			runCount.Increment()
+			time.Sleep(100 * time.Millisecond)
+			ctx.Done()
+			return nil
+		},
+	}
+	err := jm.LoadJob(job)
+	assert.Nil(err)
+	jm.SetDisableParallel(true, job.Name())
+	jm.RunJob(job.Name())
+	time.Sleep(5 * time.Millisecond)
+	jm.RunJob(job.Name())
+	assert.Equal(1, runCount.Get())
+	time.Sleep(200 * time.Millisecond)
+	jm.RunJob(job.Name())
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(2, runCount.Get())
+}
+
 func TestRunTaskAndCancelWithTimeout(t *testing.T) {
 	a := assert.New(t)
 

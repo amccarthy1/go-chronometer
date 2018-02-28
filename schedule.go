@@ -2,7 +2,7 @@ package chronometer
 
 import "time"
 
-// NOTE: time.Zero() is
+// NOTE: time.Zero()? what's that?
 var (
 	// DaysOfWeek are all the time.Weekday in an array for utility purposes.
 	DaysOfWeek = []time.Weekday{
